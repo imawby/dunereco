@@ -9,8 +9,7 @@ services:
   TFileService: { fileName: "cvn_event_dump_r%r_s%s_hist.root"
                   closeFileFast: false }
   FileCatalogMetadata:  @local::art_file_catalog_mc
-                        @table::dunefd_simulation_services
-  #@table::standard_services
+                        @table::dunefd_1x2x6_services
 }
 
 # Input source is a ROOT file 
