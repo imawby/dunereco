@@ -178,7 +178,7 @@ void FDSelection::PandizzleAlg::Run(const art::Event& evt)
 
   for (art::Ptr<recob::PFParticle> childPFP : childPFPs)
   {
-    if (childPFP->PdgCode() != 13)
+    if (!dune_ana::DUNEAnaPFParticleUtils::IsTrack(childPFP, evt, fPFParticleModuleLabel, fTrackModuleLabel))
       continue;
 
     ProcessPFParticle(childPFP, evt);

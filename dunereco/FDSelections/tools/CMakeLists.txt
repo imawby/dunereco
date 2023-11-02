@@ -31,6 +31,19 @@ simple_plugin(HighestPandizzleScoreRecoVertexTrackSelector "tool"
                       PandizzleAlg
              )
 
+simple_plugin(HighestDeepPanScoreRecoVertexTrackSelector "tool"
+    	  	        lardataobj_RecoBase
+    	  	        larpandora_LArPandoraInterface
+                ${ROOT_BASIC_LIB_LIST}
+                ${ART_FRAMEWORK_PRINCIPAL}
+                ${ART_FRAMEWORK_CORE}
+		       	   ${ART_FRAMEWORK_SERVICES_REGISTRY}
+ 	  	           art_Persistency_Common canvas
+ 	  	           art_Persistency_Provenance canvas
+ 	  	           art_Utilities canvas
+                   dunereco_TrackPID_algorithms
+             )
+
 simple_plugin(HighestEnergyRecoVertexShowerSelector "tool"
                       lardataobj::RecoBase
                       larcorealg::Geometry
