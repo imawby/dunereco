@@ -1,0 +1,15 @@
+BEGIN_PROLOG
+
+grid_manager:
+{
+  HitModuleLabel:   "hitfd"
+  RecoModuleLabel:  "pandora"
+  TrackModuleLabel: "pandoraTrack"
+  GridSize3D:        50.0
+  GridDimensions:    5
+  UWireAngle:        0.623257100582
+  VWireAngle:        -0.623257100582
+  WWireAngle:        0.0
+}
+
+END_PROLOG
