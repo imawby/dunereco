@@ -133,10 +133,12 @@ namespace ctp
     this->GetDeflectionMeanAndSigma(thisTrack,deflectionMean,deflectionSigma);
     finalInputVariables.push_back(deflectionMean);
     finalInputVariables.push_back(deflectionSigma);
+    float trackLength = thisTrack->Length();
+    finalInputVariables.push_back(trackLength);
   
     netInputs.push_back(finalInputDedx);
     netInputs.push_back(finalInputVariables);
-   
+
     if(fNormalise) this->NormaliseInputs(netInputs);
 
     return netInputs;
@@ -283,8 +285,14 @@ namespace ctp
     std::vector<art::Ptr<recob::PFParticle>> children = dune_ana::DUNEAnaPFParticleUtils::GetChildParticles(part,evt,fParticleLabel);
 
     for(const art::Ptr<recob::PFParticle> child : children){
-      nTrack += dune_ana::DUNEAnaPFParticleUtils::IsTrack(child,evt,fParticleLabel,fTrackLabel);
-      nShower += dune_ana::DUNEAnaPFParticleUtils::IsShower(child,evt,fParticleLabel,fShowerLabel);
+
+        if (child->PdgCode() == 13)
+            ++nTrack;
+        else
+            ++nShower;
+
+        //nTrack += dune_ana::DUNEAnaPFParticleUtils::IsTrack(child,evt,fParticleLabel,fTrackLabel);
+        //nShower += dune_ana::DUNEAnaPFParticleUtils::IsShower(child,evt,fParticleLabel,fShowerLabel);
       nGrand += child->NumDaughters();
     }
 //    std::cout << "Children = " << children.size() << "( " << nTrack << ", " << nShower << ") and grand children = " << nGrand << std::endl;

@@ -284,7 +284,7 @@ void FDSelection::PandrizzleAlg::Run(const art::Event& evt)
 
   for (art::Ptr<recob::PFParticle> childPFP : childPFPs)
   {
-    if (childPFP->PdgCode() != 11)
+    if (!dune_ana::DUNEAnaPFParticleUtils::IsShower(childPFP, evt, fPFParticleModuleLabel, fShowerModuleLabel))
       continue;
 
     ProcessPFParticle(childPFP, evt);
@@ -1115,15 +1115,14 @@ void FDSelection::PandrizzleAlg::GetShowerChargeDistributionVariables(const pand
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 void FDSelection::PandrizzleAlg::FillTree(){
+
   if (std::abs(fVarHolder.IntVars["TruePDG"]) == 11)
   { 
-      if (fVarHolder.IntVars["PFPPDG"] == 11)
-          fSignalShowerTree->Fill();
+      fSignalShowerTree->Fill();
   }
   else 
   { 
-      if (fVarHolder.IntVars["PFPPDG"] == 11)
-          fBackgroundShowerTree->Fill();
+      fBackgroundShowerTree->Fill();
   }
 
   return;

@@ -644,6 +644,12 @@ void FDSelection::CCNuSelection::beginJob()
     fTree->Branch("SelShowerEnhancedPandrizzleScore",&fSelShowerEnhancedPandrizzleScore);
     fTree->Branch("SelShowerBackupPandrizzleScore",&fSelShowerBackupPandrizzleScore);
 
+    // DeepPan things
+    fTree->Branch("SelTrackDeepPanMuVar", &fSelTrackDeepPanMuVar);
+    fTree->Branch("SelTrackDeepPanPiVar", &fSelTrackDeepPanPiVar);
+    fTree->Branch("SelTrackDeepPanProtonVar", &fSelTrackDeepPanProtonVar);
+
+
     // POT tree
     fPOTTree = tfs->make<TTree>("pottree","pot tree");
     fPOTTree->Branch("POT",&fPOT);
@@ -747,9 +753,6 @@ void FDSelection::CCNuSelection::beginJob()
         fTree->Branch("SelTrackMVAMuon",&fSelTrackMVAMuon);
         fTree->Branch("SelTrackMVAProton",&fSelTrackMVAProton);
         fTree->Branch("SelTrackMVAPhoton",&fSelTrackMVAPhoton);
-        fTree->Branch("SelTrackDeepPanMuVar",&fSelTrackDeepPanMuVar);
-        fTree->Branch("SelTrackDeepPanPiVar",&fSelTrackDeepPanPiVar);
-        fTree->Branch("SelTrackDeepPanProtonVar",&fSelTrackDeepPanProtonVar);
         fTree->Branch("SelTrackMichelNHits", &fSelTrackMichelNHits);
         fTree->Branch("SelTrackMichelElectronMVA", &fSelTrackMichelElectronMVA);
         fTree->Branch("SelTrackMichelRecoEnergyPlane2", &fSelTrackMichelRecoEnergyPlane2);
@@ -1420,8 +1423,12 @@ void FDSelection::CCNuSelection::GetEventInfo(art::Event const & evt)
   auto const clockData = art::ServiceHandle<detinfo::DetectorClocksService>()->DataFor(evt);
   auto const detProp = art::ServiceHandle<detinfo::DetectorPropertiesService>()->DataForJob(clockData);
 
+  std::cout << "1" << std::endl;
+
   // T0
   fT0 = trigger_offset(clockData);
+
+  std::cout << "2" << std::endl;
 
   // Get total event charge
   try
@@ -1434,17 +1441,25 @@ void FDSelection::CCNuSelection::GetEventInfo(art::Event const & evt)
       return;
   }
 
+  std::cout << "3" << std::endl;
+
   // Get CVN results
   art::Handle<std::vector<cvn::Result>> cvnResult;
   evt.getByLabel(fCVNModuleLabel, fCVNProductInstance, cvnResult);
 
-  if(!cvnResult->empty()) 
+  std::cout << "4" << std::endl;
+
+  if (!cvnResult->empty()) 
   {
       fCVNResultNue = (*cvnResult)[0].GetNueProbability();
       fCVNResultNumu = (*cvnResult)[0].GetNumuProbability();
       fCVNResultNutau = (*cvnResult)[0].GetNutauProbability();
       fCVNResultNC = (*cvnResult)[0].GetNCProbability();
   }
+
+  std::cout << "cvnResult->empty(): " << cvnResult->empty() << std::endl;
+
+  std::cout << "5" << std::endl;
 
   return;
 }
@@ -2063,14 +2078,24 @@ void FDSelection::CCNuSelection::RunTrackSelection(art::Event const & evt)
   fSelTrackdEdxEndRatio = pandizzleRecord.GetVar(FDSelection::PandizzleAlg::kdEdxEndRatio);
   fSelTrackPandizzleVar = pandizzleRecord.GetMVAScore();
 
+  std::cout << "Running deepan for selected track..." << std::endl;
+
   // DeepPan variables
   ctp::CTPResult deepPanPIDResult = fConvTrackPID.RunConvolutionalTrackPID(sel_track_pfp, evt);
   if (deepPanPIDResult.IsValid())
   {
+      std::cout << "WE HAVE A VALID DEEPPAN RESULT!" << std::endl;
+
       fSelTrackDeepPanMuVar = deepPanPIDResult.GetMuonScore();
       fSelTrackDeepPanPiVar = deepPanPIDResult.GetPionScore();
       fSelTrackDeepPanProtonVar = deepPanPIDResult.GetProtonScore();
+
+      std::cout << "fSelTrackDeepPanMuVar: " << fSelTrackDeepPanMuVar << std::endl;
+      std::cout << "fSelTrackDeepPanPiVar: " << fSelTrackDeepPanPiVar << std::endl;
+      std::cout << "fSelTrackDeepPanProtonVar: " << fSelTrackDeepPanProtonVar << std::endl;
   }
+  else { std::cout << "WE DO NOT HAVE A VALID DEEPPAN RESULT!" << std::endl; }
+
 }
 
 ///////////////////////////////////////////////////////////////////////////////////
