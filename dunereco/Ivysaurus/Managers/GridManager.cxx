@@ -27,6 +27,8 @@
 
 #include "larpandora/LArPandoraInterface/LArPandoraGeometry.h"
 
+#include "larreco/Calorimetry/CalorimetryAlg.h"
+
 #include "dunereco/Ivysaurus/Managers/GridManager.h"
 #include "dunereco/AnaUtils/DUNEAnaPFParticleUtils.h"
 #include "dunereco/AnaUtils/DUNEAnaHitUtils.h"
@@ -111,6 +113,9 @@ void GridManager::Grid::NormaliseGrid()
     {
         for (unsigned int wireIndex = 0; wireIndex < m_axisDimensions; ++wireIndex)
         {
+            if (m_countValues[driftIndex][wireIndex] < std::numeric_limits<float>::epsilon())
+                continue;
+
             m_gridValues[driftIndex][wireIndex] /= m_countValues[driftIndex][wireIndex];
         }
     }
@@ -129,7 +134,9 @@ GridManager::GridManager(const fhicl::ParameterSet& pset) :
     m_dimensions(pset.get<float>("GridDimensions")),
     m_uWireAngle(pset.get<float>("UWireAngle")), //radians
     m_vWireAngle(pset.get<float>("VWireAngle")), // radians
-    m_wWireAngle(pset.get<float>("WWireAngle")) // radians
+    m_wWireAngle(pset.get<float>("WWireAngle")), // radians
+    m_recombFactor(pset.get<float>("RecombFactor")),
+    m_calorimetryAlg(pset.get<fhicl::ParameterSet>("CalorimetryAlg"))
 {
 }
 
@@ -141,15 +148,15 @@ GridManager::~GridManager()
 
 /////////////////////////////////////////////////////////////
 
-const GridManager::Grid GridManager::ObtainViewGrid(const art::Event &evt, const art::Ptr<recob::PFParticle> &pfparticle, 
+GridManager::Grid GridManager::ObtainViewGrid(const art::Event &evt, const art::Ptr<recob::PFParticle> &pfparticle, 
     const GridManager::PandoraView pandoraView) const
 {
     // We need a pfparticle direction, let's take the track direction
     // I'm assuming that pfps have been fitted as tracks & showers
-    if (!dune_ana::DUNEAnaPFParticleUtils::IsTrack(pfparticle, evt, m_recoModuleLabel, m_recoModuleLabel))
+    if (!dune_ana::DUNEAnaPFParticleUtils::IsTrack(pfparticle, evt, m_recoModuleLabel, m_trackModuleLabel))
         return Grid(TVector3(0.f, 0.f, 0.f), 0.f, 0.f, 0, pandoraView, false);
 
-    const art::Ptr<recob::Track> track = dune_ana::DUNEAnaPFParticleUtils::GetTrack(pfparticle, evt, m_recoModuleLabel, m_recoModuleLabel);
+    const art::Ptr<recob::Track> track = dune_ana::DUNEAnaPFParticleUtils::GetTrack(pfparticle, evt, m_recoModuleLabel, m_trackModuleLabel);
     const TVector3 startDirection = TVector3(track->StartDirection().X(), track->StartDirection().Y(), track->StartDirection().Z());
     const art::Ptr<recob::Vertex> vertex = dune_ana::DUNEAnaPFParticleUtils::GetVertex(pfparticle, evt, m_recoModuleLabel);
     const TVector3 startPosition = TVector3(vertex->position().X(), vertex->position().Y(), vertex->position().Z());
@@ -195,13 +202,28 @@ void GridManager::FillViewGrid(const art::Event &evt, const art::Ptr<recob::PFPa
             continue;
 
         // TODO - these are just fillers
-        const float energy = 1.f;
+        const float energy = ObtainHitEnergy(evt, hit);
         const float weight = 1.f;
 
         grid.AddToGrid(pandoraHitPosition, energy, weight);
     }
 
     grid.NormaliseGrid();
+}
+
+/////////////////////////////////////////////////////////////
+
+float GridManager::ObtainHitEnergy(const art::Event &evt, const art::Ptr<recob::Hit> &hit) const
+{
+    art::ServiceHandle<geo::Geometry const> theGeometry;
+    auto const clockData = art::ServiceHandle<detinfo::DetectorClocksService>()->DataFor(evt);
+    auto const detProp = art::ServiceHandle<detinfo::DetectorPropertiesService const>()->DataFor(evt);
+
+    const double charge = dune_ana::DUNEAnaHitUtils::LifetimeCorrectedTotalHitCharge(clockData, detProp, {hit});
+    const double nElectrons = m_calorimetryAlg.ElectronsFromADCArea(charge,hit->WireID().Plane);
+    const double hitEnergy = nElectrons / m_recombFactor / util::kGeVToElectrons;
+
+    return hitEnergy;
 }
 
 /////////////////////////////////////////////////////////////

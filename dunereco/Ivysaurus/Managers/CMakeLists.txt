@@ -8,6 +8,7 @@ art_make(
     lardataobj_RawData
     lardataobj_RecoBase
     lardataobj_AnalysisBase
+    larreco_Calorimetry
     lardata_Utilities
     lardataalg_DetectorInfo
     nusimdata::SimulationBase

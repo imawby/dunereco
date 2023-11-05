@@ -1,7 +1,7 @@
 include_directories( ${CMAKE_CURRENT_SOURCE_DIR} )
 
 art_make( 
-    MODULE_LIBRARIES larcorealg_Geometry
+    LIB_LIBRARIES larcorealg_Geometry
     larcore_Geometry_Geometry_service
     larsim_Simulation lardataobj_Simulation
     lardataobj_RawData
@@ -25,11 +25,9 @@ art_make(
     messagefacility::MF_MessageLogger
     fhiclcpp::fhiclcpp
     cetlib::cetlib cetlib_except
-    
     ROOT_BASIC_LIB_LIST
     dunereco_AnaUtils
     dunereco_Ivysaurus_Managers
-    dunereco_Ivysaurus_Utils
 )
 
 install_headers()
