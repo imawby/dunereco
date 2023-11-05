@@ -1,3 +1,5 @@
+#include "calorimetry_dune10kt.fcl"
+
 BEGIN_PROLOG
 
 grid_manager:
@@ -10,6 +12,8 @@ grid_manager:
   UWireAngle:        0.623257100582
   VWireAngle:        -0.623257100582
   WWireAngle:        0.0
+  RecombFactor:      0.63
+  CalorimetryAlg:    @local::dune10kt_calorimetryalgmc
 }
 
 END_PROLOG

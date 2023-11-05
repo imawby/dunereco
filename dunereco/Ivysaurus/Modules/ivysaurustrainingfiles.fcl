@@ -1,0 +1,14 @@
+#include "gridmanager.fcl"
+
+BEGIN_PROLOG
+
+ivysaurus_training_files:
+{
+  module_type: IvysaurusTrainingFiles
+
+  GridManager: @local::grid_manager
+  HitModuleLabel:   'hitfd'
+  RecoModuleLabel:  'pandora'
+}
+
+END_PROLOG
