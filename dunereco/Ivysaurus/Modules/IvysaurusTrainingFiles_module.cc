@@ -55,15 +55,24 @@ private:
   std::vector<std::vector<double>> m_projectionsU;
   std::vector<std::vector<double>> m_projectionsV;
   std::vector<std::vector<double>> m_projectionsW;
-  std::vector<float> m_driftBoundariesU;
-  std::vector<float> m_driftBoundariesV;
-  std::vector<float> m_driftBoundariesW;
-  std::vector<float> m_wireBoundariesU;
-  std::vector<float> m_wireBoundariesV;
-  std::vector<float> m_wireBoundariesW;
-  std::vector<std::vector<float>> m_gridValuesU;
-  std::vector<std::vector<float>> m_gridValuesV;
-  std::vector<std::vector<float>> m_gridValuesW;
+  std::vector<float> m_startDriftBoundariesU;
+  std::vector<float> m_startDriftBoundariesV;
+  std::vector<float> m_startDriftBoundariesW;
+  std::vector<float> m_endDriftBoundariesU;
+  std::vector<float> m_endDriftBoundariesV;
+  std::vector<float> m_endDriftBoundariesW;
+  std::vector<float> m_startWireBoundariesU;
+  std::vector<float> m_startWireBoundariesV;
+  std::vector<float> m_startWireBoundariesW;
+  std::vector<float> m_endWireBoundariesU;
+  std::vector<float> m_endWireBoundariesV;
+  std::vector<float> m_endWireBoundariesW;
+  std::vector<std::vector<float>> m_startGridValuesU;
+  std::vector<std::vector<float>> m_startGridValuesV;
+  std::vector<std::vector<float>> m_startGridValuesW;
+  std::vector<std::vector<float>> m_endGridValuesU;
+  std::vector<std::vector<float>> m_endGridValuesV;
+  std::vector<std::vector<float>> m_endGridValuesW;
 
   // Managers
   GridManager m_gridManager;
@@ -164,9 +173,10 @@ void IvysaurusTrainingFiles::analyze(const art::Event &evt)
         ////////////////////////////////////////////  
         for (GridManager::PandoraView pandoraView : {GridManager::PandoraView::TPC_VIEW_U, GridManager::PandoraView::TPC_VIEW_V, GridManager::PandoraView::TPC_VIEW_W})
         {
-            GridManager::Grid grid = m_gridManager.ObtainViewGrid(evt, pfparticle, pandoraView);
+            GridManager::Grid startGrid = m_gridManager.ObtainViewGrid(evt, pfparticle, pandoraView, true);
+            GridManager::Grid endGrid = m_gridManager.ObtainViewGrid(evt, pfparticle, pandoraView, false);
 
-            if (!grid.IsInitialised())
+            if (!startGrid.IsInitialised() || !endGrid.IsInitialised())
                 continue;
 
             ////////////////////////////////////////////
@@ -197,20 +207,33 @@ void IvysaurusTrainingFiles::analyze(const art::Event &evt)
             ////////////////////////////////////////////
             // Then fill grid vectors...
             ////////////////////////////////////////////
-            m_gridManager.FillViewGrid(evt, pfparticle, grid);
+            m_gridManager.FillViewGrid(evt, pfparticle, startGrid);
+            m_gridManager.FillViewGrid(evt, pfparticle, endGrid);
 
-            std::vector<float> &driftBoundaries = pandoraView == GridManager::PandoraView::TPC_VIEW_U ? m_driftBoundariesU :
-                pandoraView == GridManager::PandoraView::TPC_VIEW_V ? m_driftBoundariesV : m_driftBoundariesW;
+            std::vector<float> &startDriftBoundaries = pandoraView == GridManager::PandoraView::TPC_VIEW_U ? m_startDriftBoundariesU :
+                pandoraView == GridManager::PandoraView::TPC_VIEW_V ? m_startDriftBoundariesV : m_startDriftBoundariesW;
 
-            std::vector<float> &wireBoundaries = pandoraView == GridManager::PandoraView::TPC_VIEW_U ? m_wireBoundariesU : 
-                pandoraView == GridManager::PandoraView::TPC_VIEW_V ? m_wireBoundariesV : m_wireBoundariesW;
+            std::vector<float> &endDriftBoundaries = pandoraView == GridManager::PandoraView::TPC_VIEW_U ? m_endDriftBoundariesU :
+                pandoraView == GridManager::PandoraView::TPC_VIEW_V ? m_endDriftBoundariesV : m_endDriftBoundariesW;
 
-            std::vector<std::vector<float>> &gridValues = pandoraView == GridManager::PandoraView::TPC_VIEW_U ? m_gridValuesU : 
-                pandoraView == GridManager::PandoraView::TPC_VIEW_V ? m_gridValuesV : m_gridValuesW;
+            std::vector<float> &startWireBoundaries = pandoraView == GridManager::PandoraView::TPC_VIEW_U ? m_startWireBoundariesU : 
+                pandoraView == GridManager::PandoraView::TPC_VIEW_V ? m_startWireBoundariesV : m_startWireBoundariesW;
 
-            driftBoundaries = grid.GetDriftBoundaries();
-            wireBoundaries = grid.GetWireBoundaries();
-            gridValues = grid.GetGridValues();
+            std::vector<float> &endWireBoundaries = pandoraView == GridManager::PandoraView::TPC_VIEW_U ? m_endWireBoundariesU : 
+                pandoraView == GridManager::PandoraView::TPC_VIEW_V ? m_endWireBoundariesV : m_endWireBoundariesW;
+
+            std::vector<std::vector<float>> &startGridValues = pandoraView == GridManager::PandoraView::TPC_VIEW_U ? m_startGridValuesU : 
+                pandoraView == GridManager::PandoraView::TPC_VIEW_V ? m_startGridValuesV : m_startGridValuesW;
+
+            std::vector<std::vector<float>> &endGridValues = pandoraView == GridManager::PandoraView::TPC_VIEW_U ? m_endGridValuesU : 
+                pandoraView == GridManager::PandoraView::TPC_VIEW_V ? m_endGridValuesV : m_endGridValuesW;
+
+            startDriftBoundaries = startGrid.GetDriftBoundaries();
+            endDriftBoundaries = endGrid.GetDriftBoundaries();
+            startWireBoundaries = startGrid.GetWireBoundaries();
+            endWireBoundaries = endGrid.GetWireBoundaries();
+            startGridValues = startGrid.GetGridValues();
+            endGridValues = endGrid.GetGridValues();
         }
 
         m_tree->Fill();
@@ -235,15 +258,24 @@ void IvysaurusTrainingFiles::Reset()
   m_projectionsU.clear();
   m_projectionsV.clear();
   m_projectionsW.clear();
-  m_driftBoundariesU.clear();
-  m_driftBoundariesV.clear();
-  m_driftBoundariesW.clear();
-  m_wireBoundariesU.clear();
-  m_wireBoundariesV.clear();
-  m_wireBoundariesW.clear();
-  m_gridValuesU.clear();
-  m_gridValuesV.clear();
-  m_gridValuesW.clear();
+  m_startDriftBoundariesU.clear();
+  m_startDriftBoundariesV.clear();
+  m_startDriftBoundariesW.clear();
+  m_endDriftBoundariesU.clear();
+  m_endDriftBoundariesV.clear();
+  m_endDriftBoundariesW.clear();
+  m_startWireBoundariesU.clear();
+  m_startWireBoundariesV.clear();
+  m_startWireBoundariesW.clear();
+  m_endWireBoundariesU.clear();
+  m_endWireBoundariesV.clear();
+  m_endWireBoundariesW.clear();
+  m_startGridValuesU.clear();
+  m_startGridValuesV.clear();
+  m_startGridValuesW.clear();
+  m_endGridValuesU.clear();
+  m_endGridValuesV.clear();
+  m_endGridValuesW.clear();
 }
 
 //------------------------------------------------------------------------------------------------------------------------------------------
@@ -264,15 +296,24 @@ void IvysaurusTrainingFiles::beginJob()
     m_tree->Branch("ProjectionsU", &m_projectionsU);
     m_tree->Branch("ProjectionsV", &m_projectionsV);
     m_tree->Branch("ProjectionsW", &m_projectionsW);
-    m_tree->Branch("DriftBoundariesU", &m_driftBoundariesU);
-    m_tree->Branch("DriftBoundariesV", &m_driftBoundariesV);
-    m_tree->Branch("DriftBoundariesW", &m_driftBoundariesW);
-    m_tree->Branch("WireBoundariesU", &m_wireBoundariesU);
-    m_tree->Branch("WireBoundariesV", &m_wireBoundariesV);
-    m_tree->Branch("WireBoundariesW", &m_wireBoundariesW);
-    m_tree->Branch("GridU", &m_gridValuesU);
-    m_tree->Branch("GridV", &m_gridValuesV);
-    m_tree->Branch("GridW", &m_gridValuesW);
+    m_tree->Branch("StartDriftBoundariesU", &m_startDriftBoundariesU);
+    m_tree->Branch("StartDriftBoundariesV", &m_startDriftBoundariesV);
+    m_tree->Branch("StartDriftBoundariesW", &m_startDriftBoundariesW);
+    m_tree->Branch("EndDriftBoundariesU", &m_endDriftBoundariesU);
+    m_tree->Branch("EndDriftBoundariesV", &m_endDriftBoundariesV);
+    m_tree->Branch("EndDriftBoundariesW", &m_endDriftBoundariesW);
+    m_tree->Branch("StartWireBoundariesU", &m_startWireBoundariesU);
+    m_tree->Branch("StartWireBoundariesV", &m_startWireBoundariesV);
+    m_tree->Branch("StartWireBoundariesW", &m_startWireBoundariesW);
+    m_tree->Branch("EndWireBoundariesU", &m_endWireBoundariesU);
+    m_tree->Branch("EndWireBoundariesV", &m_endWireBoundariesV);
+    m_tree->Branch("EndWireBoundariesW", &m_endWireBoundariesW);
+    m_tree->Branch("StartGridU", &m_startGridValuesU);
+    m_tree->Branch("StartGridV", &m_startGridValuesV);
+    m_tree->Branch("StartGridW", &m_startGridValuesW);
+    m_tree->Branch("EndGridU", &m_endGridValuesU);
+    m_tree->Branch("EndGridV", &m_endGridValuesV);
+    m_tree->Branch("EndGridW", &m_endGridValuesW);
 }
 
 //------------------------------------------------------------------------------------------------------------------------------------------

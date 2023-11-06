@@ -62,7 +62,8 @@ class GridManager
     ~GridManager();
 
     // Function to place the grid in space
-    Grid ObtainViewGrid(const art::Event &evt, const art::Ptr<recob::PFParticle> &pfparticle, const PandoraView tpcView) const;
+    Grid ObtainViewGrid(const art::Event &evt, const art::Ptr<recob::PFParticle> &pfparticle, 
+        const PandoraView pandoraView, const bool isStart) const;
 
     // Function to fill the grid
     void FillViewGrid(const art::Event &evt, const art::Ptr<recob::PFParticle> &pfparticle, 
