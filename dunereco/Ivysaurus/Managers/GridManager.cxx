@@ -149,7 +149,7 @@ GridManager::~GridManager()
 /////////////////////////////////////////////////////////////
 
 GridManager::Grid GridManager::ObtainViewGrid(const art::Event &evt, const art::Ptr<recob::PFParticle> &pfparticle, 
-    const GridManager::PandoraView pandoraView) const
+    const GridManager::PandoraView pandoraView, const bool isStart) const
 {
     // We need a pfparticle direction, let's take the track direction
     // I'm assuming that pfps have been fitted as tracks & showers
@@ -157,19 +157,26 @@ GridManager::Grid GridManager::ObtainViewGrid(const art::Event &evt, const art::
         return Grid(TVector3(0.f, 0.f, 0.f), 0.f, 0.f, 0, pandoraView, false);
 
     const art::Ptr<recob::Track> track = dune_ana::DUNEAnaPFParticleUtils::GetTrack(pfparticle, evt, m_recoModuleLabel, m_trackModuleLabel);
-    const TVector3 startDirection = TVector3(track->StartDirection().X(), track->StartDirection().Y(), track->StartDirection().Z());
-    const art::Ptr<recob::Vertex> vertex = dune_ana::DUNEAnaPFParticleUtils::GetVertex(pfparticle, evt, m_recoModuleLabel);
-    const TVector3 startPosition = TVector3(vertex->position().X(), vertex->position().Y(), vertex->position().Z());
+    const TVector3 direction = isStart ? TVector3(track->StartDirection().X(), track->StartDirection().Y(), track->StartDirection().Z()) :
+        TVector3(track->EndDirection().X() * (-1.f), track->EndDirection().Y() * (-1.f), track->EndDirection().Z() * (-1.f));
+    const TVector3 position = isStart ? TVector3(track->Start().X(), track->Start().Y(), track->Start().Z()) :
+        TVector3(track->End().X(), track->End().Y(), track->End().Z());
     const float diagonalLength = sqrt(2.0 * (m_gridSize3D * m_gridSize3D));
-    const TVector3 extrapolatedPosition = startPosition + (startDirection * diagonalLength);
+    const TVector3 extrapolatedPosition = position + (direction * diagonalLength);
+
+    std::cout << "directionX: " << direction.X() << std::endl;
+    std::cout << "directionY: " << direction.Y() << std::endl;
+    std::cout << "directionZ: " << direction.Z() << std::endl;
+    std::cout << "magnitude: " << direction.Mag() << std::endl;
+    std::cout << "-----------------------" << std::endl;
 
     // Now need to project these things into the 'Pandora view'
-    const TVector3 projectedStart = ProjectIntoPandoraView(startPosition, pandoraView);
+    const TVector3 projectedPosition = ProjectIntoPandoraView(position, pandoraView);
     const TVector3 projectedExtrapolated = ProjectIntoPandoraView(extrapolatedPosition, pandoraView);
-    const float driftSpan = projectedExtrapolated.X() - projectedStart.X();
-    const float wireSpan = projectedExtrapolated.Z() - projectedStart.Z();
+    const float driftSpan = projectedExtrapolated.X() - projectedPosition.X();
+    const float wireSpan = projectedExtrapolated.Z() - projectedPosition.Z();
 
-    return Grid(projectedStart, driftSpan, wireSpan, m_dimensions, pandoraView, true);
+    return Grid(projectedPosition, driftSpan, wireSpan, m_dimensions, pandoraView, true);
 }
 
 /////////////////////////////////////////////////////////////
