@@ -39,7 +39,9 @@ double HitPurityFromTrueParticleID(detinfo::DetectorClocksData const& clockData,
         if (matchedID == trackID) nMatchesInSelHits++;
     }
 
-    const double purity = (selectedHits.size() > 0) ? static_cast<double>(nMatchesInSelHits) / selectedHits.size() : 0.0;
+    const double purity = (selectedHits.size() > 0) ? static_cast<double>(nMatchesInSelHits) / static_cast<double>(selectedHits.size()) : 0.0;
+
+    std::cout << "purity: " << purity << std::endl;
 
     return purity;
 }

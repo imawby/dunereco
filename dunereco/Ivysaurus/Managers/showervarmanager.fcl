@@ -1,0 +1,11 @@
+#include "calorimetry_dune10kt.fcl"
+
+BEGIN_PROLOG
+
+showervar_manager:
+{
+  RecoModuleLabel:   "pandora"
+  ShowerModuleLabel: "pandoraShower"
+}
+
+END_PROLOG
