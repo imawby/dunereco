@@ -7,8 +7,9 @@ grid_manager:
   HitModuleLabel:   "hitfd"
   RecoModuleLabel:  "pandora"
   TrackModuleLabel: "pandoraTrack"
-  GridSize3D:        50.0
-  GridDimensions:    16
+  ShowerModuleLabel: "pandoraShower"
+  GridSize3D:        25.0
+  GridDimensions:    12
   UWireAngle:        0.623257100582
   VWireAngle:        -0.623257100582
   WWireAngle:        0.0

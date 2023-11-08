@@ -130,6 +130,7 @@ GridManager::GridManager(const fhicl::ParameterSet& pset) :
     m_hitModuleLabel(pset.get<std::string>("HitModuleLabel")),
     m_recoModuleLabel(pset.get<std::string>("RecoModuleLabel")),
     m_trackModuleLabel(pset.get<std::string>("TrackModuleLabel")),
+    m_showerModuleLabel(pset.get<std::string>("ShowerModuleLabel")),
     m_gridSize3D(pset.get<float>("GridSize3D")),
     m_dimensions(pset.get<float>("GridDimensions")),
     m_uWireAngle(pset.get<float>("UWireAngle")), //radians
@@ -151,32 +152,152 @@ GridManager::~GridManager()
 GridManager::Grid GridManager::ObtainViewGrid(const art::Event &evt, const art::Ptr<recob::PFParticle> &pfparticle, 
     const GridManager::PandoraView pandoraView, const bool isStart) const
 {
-    // We need a pfparticle direction, let's take the track direction
-    // I'm assuming that pfps have been fitted as tracks & showers
-    if (!dune_ana::DUNEAnaPFParticleUtils::IsTrack(pfparticle, evt, m_recoModuleLabel, m_trackModuleLabel))
+    const art::Ptr<larpandoraobj::PFParticleMetadata> &metadata = dune_ana::DUNEAnaPFParticleUtils::GetMetadata(pfparticle, evt, m_recoModuleLabel);
+    const auto metaMap = metadata->GetPropertiesMap();
+
+    if (metaMap.find("TrackScore") == metaMap.end())
         return Grid(TVector3(0.f, 0.f, 0.f), 0.f, 0.f, 0, pandoraView, false);
 
-    const art::Ptr<recob::Track> track = dune_ana::DUNEAnaPFParticleUtils::GetTrack(pfparticle, evt, m_recoModuleLabel, m_trackModuleLabel);
-    const TVector3 direction = isStart ? TVector3(track->StartDirection().X(), track->StartDirection().Y(), track->StartDirection().Z()) :
-        TVector3(track->EndDirection().X() * (-1.f), track->EndDirection().Y() * (-1.f), track->EndDirection().Z() * (-1.f));
-    const TVector3 position = isStart ? TVector3(track->Start().X(), track->Start().Y(), track->Start().Z()) :
-        TVector3(track->End().X(), track->End().Y(), track->End().Z());
-    const float diagonalLength = sqrt(2.0 * (m_gridSize3D * m_gridSize3D));
-    const TVector3 extrapolatedPosition = position + (direction * diagonalLength);
+    const float trackScore = metaMap.at("TrackScore");
 
-    std::cout << "directionX: " << direction.X() << std::endl;
-    std::cout << "directionY: " << direction.Y() << std::endl;
-    std::cout << "directionZ: " << direction.Z() << std::endl;
-    std::cout << "magnitude: " << direction.Mag() << std::endl;
-    std::cout << "-----------------------" << std::endl;
+    // Find the extremal diagonal.. 
+    TVector3 position1 = TVector3(0.f, 0.f, 0.f);
+    TVector3 position2 = TVector3(0.f, 0.f, 0.f); // Along the particle direction from position1
+
+    if (isStart)
+    {
+        if (trackScore > 0.5f)
+        {
+            if (!GetStartExtremalPointsTrack(evt, pfparticle, position1, position2))
+            {
+                if (!GetStartExtremalPointsShower(evt, pfparticle, position1, position2))
+                {
+                    return Grid(TVector3(0.f, 0.f, 0.f), 0.f, 0.f, 0, pandoraView, false);
+                }
+            }
+        }
+        else
+        {
+            if (!GetStartExtremalPointsShower(evt, pfparticle, position1, position2))
+            {
+                if (!GetStartExtremalPointsTrack(evt, pfparticle, position1, position2))
+                {
+                    return Grid(TVector3(0.f, 0.f, 0.f), 0.f, 0.f, 0, pandoraView, false);
+                }
+            }
+        }
+    }
+    else
+    {
+        if (trackScore > 0.5f)
+        {
+            if (!GetEndExtremalPointsTrack(evt, pfparticle, position1, position2))
+            {
+                if (!GetEndExtremalPointsShower(evt, pfparticle, position1, position2))
+                {
+                    return Grid(TVector3(0.f, 0.f, 0.f), 0.f, 0.f, 0, pandoraView, false);
+                }
+            }
+        }
+        else
+        {
+            if (!GetEndExtremalPointsShower(evt, pfparticle, position1, position2))
+            {
+                if (!GetEndExtremalPointsTrack(evt, pfparticle, position1, position2))
+                {
+                    return Grid(TVector3(0.f, 0.f, 0.f), 0.f, 0.f, 0, pandoraView, false);
+                }
+            }
+        }
+    }
 
     // Now need to project these things into the 'Pandora view'
-    const TVector3 projectedPosition = ProjectIntoPandoraView(position, pandoraView);
-    const TVector3 projectedExtrapolated = ProjectIntoPandoraView(extrapolatedPosition, pandoraView);
-    const float driftSpan = projectedExtrapolated.X() - projectedPosition.X();
-    const float wireSpan = projectedExtrapolated.Z() - projectedPosition.Z();
+    const TVector3 projectedPosition1 = ProjectIntoPandoraView(position1, pandoraView);
+    const TVector3 projectedPosition2 = ProjectIntoPandoraView(position2, pandoraView);
+    const float driftSpan = projectedPosition2.X() - projectedPosition1.X();
+    const float wireSpan = projectedPosition2.Z() - projectedPosition1.Z();
 
-    return Grid(projectedPosition, driftSpan, wireSpan, m_dimensions, pandoraView, true);
+    return Grid(projectedPosition1, driftSpan, wireSpan, m_dimensions, pandoraView, true);
+}
+
+/////////////////////////////////////////////////////////////
+
+bool GridManager::GetStartExtremalPointsTrack(const art::Event &evt, const art::Ptr<recob::PFParticle> &pfparticle, 
+    TVector3 &position1, TVector3 &position2) const
+{
+    if (!dune_ana::DUNEAnaPFParticleUtils::IsTrack(pfparticle, evt, m_recoModuleLabel, m_trackModuleLabel))
+        return false;
+
+    const art::Ptr<recob::Track> track = dune_ana::DUNEAnaPFParticleUtils::GetTrack(pfparticle, evt, m_recoModuleLabel, m_trackModuleLabel);
+
+    const TVector3 direction = TVector3(track->StartDirection().X(), track->StartDirection().Y(), track->StartDirection().Z());
+    position1 = TVector3(track->Start().X(), track->Start().Y(), track->Start().Z());
+    const float diagonalLength = sqrt(2.0 * (m_gridSize3D * m_gridSize3D));
+    position2 = position1 + (direction * diagonalLength);
+
+    return true;
+}
+
+/////////////////////////////////////////////////////////////
+
+bool GridManager::GetStartExtremalPointsShower(const art::Event &evt, const art::Ptr<recob::PFParticle> &pfparticle, 
+    TVector3 &position1, TVector3 &position2) const
+{
+    if (!dune_ana::DUNEAnaPFParticleUtils::IsShower(pfparticle, evt, m_recoModuleLabel, m_showerModuleLabel))
+        return false;
+
+    const art::Ptr<recob::Shower> shower = dune_ana::DUNEAnaPFParticleUtils::GetShower(pfparticle, evt, m_recoModuleLabel, m_showerModuleLabel);
+
+    const TVector3 direction = TVector3(shower->Direction().X(), shower->Direction().Y(), shower->Direction().Z());
+    position1 = TVector3(shower->ShowerStart().X(), shower->ShowerStart().Y(), shower->ShowerStart().Z());
+    const float diagonalLength = sqrt(2.0 * (m_gridSize3D * m_gridSize3D));
+    position2 = position1 + (direction * diagonalLength);
+
+    return true;
+}
+
+/////////////////////////////////////////////////////////////
+
+bool GridManager::GetEndExtremalPointsTrack(const art::Event &evt, const art::Ptr<recob::PFParticle> &pfparticle, 
+    TVector3 &position1, TVector3 &position2) const
+{
+    // Is track...
+    if (!dune_ana::DUNEAnaPFParticleUtils::IsTrack(pfparticle, evt, m_recoModuleLabel, m_trackModuleLabel))
+        return false;
+
+    const art::Ptr<recob::Track> track = dune_ana::DUNEAnaPFParticleUtils::GetTrack(pfparticle, evt, m_recoModuleLabel, m_trackModuleLabel);
+
+    const TVector3 direction = TVector3(track->EndDirection().X(), track->EndDirection().Y(), track->EndDirection().Z());
+    const TVector3 end = TVector3(track->End().X(), track->End().Y(), track->End().Z());
+
+    const float diagonalLength = sqrt(2.0 * (m_gridSize3D * m_gridSize3D));
+    position1 = end - (direction * (diagonalLength / 2.0)); 
+    position2 = end + (direction * (diagonalLength / 2.0));
+
+    return true;
+}
+
+/////////////////////////////////////////////////////////////
+
+bool GridManager::GetEndExtremalPointsShower(const art::Event &evt, const art::Ptr<recob::PFParticle> &pfparticle, 
+    TVector3 &position1, TVector3 &position2) const
+{
+    // Is shower...
+    if (!dune_ana::DUNEAnaPFParticleUtils::IsShower(pfparticle, evt, m_recoModuleLabel, m_showerModuleLabel))
+        return false;
+
+    const art::Ptr<recob::Shower> shower = dune_ana::DUNEAnaPFParticleUtils::GetShower(pfparticle, evt, m_recoModuleLabel, m_showerModuleLabel);
+
+    const TVector3 direction = TVector3(shower->Direction().X(), shower->Direction().Y(), shower->Direction().Z());
+    const TVector3 start = TVector3(shower->ShowerStart().X(), shower->ShowerStart().Y(), shower->ShowerStart().Z());
+    const float length = shower->Length();
+    const TVector3 end = start + (length * direction);
+
+    const float diagonalLength = sqrt(2.0 * (m_gridSize3D * m_gridSize3D));
+    position1 = end - (direction * (diagonalLength / 2.0)); 
+    position2 = end + (direction * (diagonalLength / 2.0));
+
+    return true;
 }
 
 /////////////////////////////////////////////////////////////

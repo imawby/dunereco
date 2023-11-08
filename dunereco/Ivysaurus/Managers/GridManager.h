@@ -79,6 +79,18 @@ class GridManager
   private:
     float ObtainHitEnergy(const art::Event &evt, const art::Ptr<recob::Hit> &hit) const;
 
+    bool GetStartExtremalPointsTrack(const art::Event &evt, const art::Ptr<recob::PFParticle> &pfparticle, 
+        TVector3 &position1, TVector3 &position2) const;
+
+    bool GetStartExtremalPointsShower(const art::Event &evt, const art::Ptr<recob::PFParticle> &pfparticle, 
+        TVector3 &position1, TVector3 &position2) const;
+
+    bool GetEndExtremalPointsTrack(const art::Event &evt, const art::Ptr<recob::PFParticle> &pfparticle, 
+        TVector3 &position1, TVector3 &position2) const;
+
+    bool GetEndExtremalPointsShower(const art::Event &evt, const art::Ptr<recob::PFParticle> &pfparticle, 
+        TVector3 &position1, TVector3 &position2) const;
+
     // Function to project a 3D coordinate into a specified Pandora 2D view
     const TVector3 ProjectIntoPandoraView(const TVector3 &inputPosition3D, const GridManager::PandoraView pandoraView) const;
 
@@ -94,6 +106,7 @@ class GridManager
     std::string m_hitModuleLabel;
     std::string m_recoModuleLabel;
     std::string m_trackModuleLabel;
+    std::string m_showerModuleLabel;
 
     float m_gridSize3D;
     unsigned int m_dimensions;

@@ -1,0 +1,11 @@
+#include "calorimetry_dune10kt.fcl"
+
+BEGIN_PROLOG
+
+trackvar_manager:
+{
+  RecoModuleLabel:  "pandora"
+  TrackModuleLabel: "pandoraTrack"
+}
+
+END_PROLOG
