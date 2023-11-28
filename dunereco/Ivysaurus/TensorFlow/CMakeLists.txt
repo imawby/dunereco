@@ -1,22 +1,22 @@
 include_directories( ${CMAKE_CURRENT_SOURCE_DIR} )
 
 art_make( 
-  LIB_LIBRARIES
+    LIB_LIBRARIES 
   pthread
   TensorFlow::cc
   TensorFlow::framework
-
-    MODULE_LIBRARIES larcorealg_Geometry
+    larcorealg_Geometry
     larcore_Geometry_Geometry_service
     larsim_Simulation lardataobj_Simulation
     lardataobj_RawData
     lardataobj_RecoBase
     lardataobj_AnalysisBase
+    larreco_Calorimetry
     lardata_Utilities
+    lardataalg_DetectorInfo
     nusimdata::SimulationBase
     larsim_MCCheater_BackTrackerService_service           
     larsim_MCCheater_ParticleInventoryService_service
-    larsim_Utils
     ART_FRAMEWORK_CORE
     ART_FRAMEWORK_PRINCIPAL
     ART_FRAMEWORK_SERVICES_REGISTRY
@@ -30,15 +30,14 @@ art_make(
     messagefacility::MF_MessageLogger
     fhiclcpp::fhiclcpp
     cetlib::cetlib cetlib_except
-
+    larpandora_LArPandoraInterface
     ROOT_BASIC_LIB_LIST
     dunereco_AnaUtils
-    dunereco_Ivysaurus_Managers
+    larreco_RecoAlg
     dunereco_Ivysaurus_Utils
-    dunereco_Ivysaurus_TensorFlow
+    dunereco_Ivysaurus_Managers
 )
 
 install_headers()
 install_fhicl()
 install_source()
-

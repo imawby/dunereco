@@ -27,7 +27,7 @@ art_make(
     cetlib::cetlib cetlib_except
     ROOT_BASIC_LIB_LIST
     dunereco_AnaUtils
-    dunereco_Ivysaurus_Managers
+    larpandora_LArPandoraInterface
 )
 
 install_headers()

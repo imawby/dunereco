@@ -16,6 +16,8 @@
 #include "art/Framework/Principal/Event.h"
 #include "canvas/Persistency/Common/FindManyP.h"
 
+#include "dunereco/Ivysaurus/Utils/IvysaurusUtils.h"
+
 #include "lardataobj/RecoBase/PFParticle.h"
 #include "lardataobj/RecoBase/Shower.h"
 
@@ -31,6 +33,10 @@ class ShowerVarManager
       ShowerVars();
 
       float GetDisplacement() const;
+      float GetDCA() const;
+      float GetTrackStubLength() const;
+      float GetNuVertexAvSeparation() const;
+      float GetNuVertexChargeAsymmetry() const;
       float GetInitialGapSize() const;
       float GetLargestGapSize() const;
       float GetPathwayLength() const;
@@ -47,6 +53,10 @@ class ShowerVarManager
       float GetUnaccountedEnergy() const;
       ////
       void SetDisplacement(const float displacement);
+      void SetDCA(const float dca);
+      void SetTrackStubLength(const float trackStubLength);
+      void SetNuVertexAvSeparation(const float nuVertexAvSeparation);
+      void SetNuVertexChargeAsymmetry(const float nuVertexChargeAsymmetry);
       void SetInitialGapSize(const float initialGapSize);
       void SetLargestGapSize(const float largestGapSize);
       void SetPathwayLength(const float pathwayLength);
@@ -64,6 +74,10 @@ class ShowerVarManager
 
     private:
       float m_displacement;
+      float m_DCA;
+      float m_trackStubLength;
+      float m_nuVertexAvSeparation;
+      float m_nuVertexChargeAsymmetry;
       float m_initialGapSize;
       float m_largestGapSize;
       float m_pathwayLength;
@@ -88,12 +102,20 @@ class ShowerVarManager
 
   private:
     void FillDisplacement(const art::Event &evt, const art::Ptr<recob::Shower> &shower, ShowerVarManager::ShowerVars &showerVars) const;
-
+    void FillTrackStub(const art::Event &evt, const art::Ptr<recob::Shower> shower, 
+        ShowerVarManager::ShowerVars &showerVars) const;
     void FillConnectionPathwayVars(const art::Event &evt, const art::Ptr<recob::PFParticle> &pfparticle, 
         ShowerVarManager::ShowerVars &showerVars) const;
+    void FillNuVertexAvSeparation(const art::Event &evt, const art::Ptr<recob::PFParticle> &pfparticle, 
+        ShowerVarManager::ShowerVars &showerVars) const;
+    void FillNuVertexChargeAsymmetry(const art::Event &evt, const art::Ptr<recob::Shower> &shower, 
+        ShowerVarManager::ShowerVars &showerVars) const;
+    float GetViewNuVertexChargeAsymmetry(const art::Event &evt, const TVector3 &nuVertexPosition, const TVector3 &showerStart, 
+        const std::vector<art::Ptr<recob::Hit>> &viewHits, const IvysaurusUtils::PandoraView &pandoraView) const;
 
     std::string m_recoModuleLabel;
     std::string m_showerModuleLabel;
+    std::string m_hitModuleLabel;
 };
 
 /////////////////////////////////////////////////////////////
@@ -101,6 +123,34 @@ class ShowerVarManager
 inline float ShowerVarManager::ShowerVars::GetDisplacement() const
 {
     return m_displacement;
+}
+
+/////////////////////////////////////////////////////////////
+
+inline float ShowerVarManager::ShowerVars::GetDCA() const
+{
+    return m_DCA;
+}
+
+/////////////////////////////////////////////////////////////
+
+inline float ShowerVarManager::ShowerVars::GetTrackStubLength() const
+{
+    return m_trackStubLength;
+}
+
+/////////////////////////////////////////////////////////////
+
+inline float ShowerVarManager::ShowerVars::GetNuVertexAvSeparation() const
+{
+    return m_nuVertexAvSeparation;
+}
+
+/////////////////////////////////////////////////////////////
+
+inline float ShowerVarManager::ShowerVars::GetNuVertexChargeAsymmetry() const
+{
+    return m_nuVertexChargeAsymmetry;
 }
 
 /////////////////////////////////////////////////////////////
@@ -206,6 +256,34 @@ inline float ShowerVarManager::ShowerVars::GetUnaccountedEnergy() const
 inline void ShowerVarManager::ShowerVars::SetDisplacement(const float displacement) 
 {
     m_displacement = displacement;
+}
+
+/////////////////////////////////////////////////////////////
+
+inline void ShowerVarManager::ShowerVars::SetDCA(const float dca)
+{
+    m_DCA = dca;
+}
+
+/////////////////////////////////////////////////////////////
+
+inline void ShowerVarManager::ShowerVars::SetTrackStubLength(const float trackStubLength)
+{
+    m_trackStubLength = trackStubLength;
+}
+
+/////////////////////////////////////////////////////////////
+
+inline void ShowerVarManager::ShowerVars::SetNuVertexAvSeparation(const float nuVertexAvSeparation)
+{
+    m_nuVertexAvSeparation = nuVertexAvSeparation;
+}
+
+/////////////////////////////////////////////////////////////
+
+inline void ShowerVarManager::ShowerVars::SetNuVertexChargeAsymmetry(const float nuVertexChargeAsymmetry)
+{
+    m_nuVertexChargeAsymmetry = nuVertexChargeAsymmetry;
 }
 
 /////////////////////////////////////////////////////////////

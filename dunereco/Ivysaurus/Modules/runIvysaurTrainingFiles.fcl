@@ -46,5 +46,7 @@ physics:
   end_paths: [ stream1 ]
 }
 
+physics.producers.pandora.ConfigFile: "PandoraSettings_Master_DUNEFD_DizzleSelection.xml"
+
 ########################################################################
 

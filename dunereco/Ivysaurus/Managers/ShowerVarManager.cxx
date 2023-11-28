@@ -27,15 +27,21 @@
 #include "larpandora/LArPandoraInterface/LArPandoraGeometry.h"
 
 #include "dunereco/AnaUtils/DUNEAnaEventUtils.h"
+#include "dunereco/AnaUtils/DUNEAnaHitUtils.h"
 #include "dunereco/AnaUtils/DUNEAnaPFParticleUtils.h"
+#include "dunereco/AnaUtils/DUNEAnaShowerUtils.h"
 #include "dunereco/Ivysaurus/Managers/ShowerVarManager.h"
-
+#include "dunereco/Ivysaurus/Utils/IvysaurusUtils.h"
 
 namespace ivysaurus
 {
 
 ShowerVarManager::ShowerVars::ShowerVars() : 
     m_displacement(-1.f),
+    m_DCA(-1.f),
+    m_trackStubLength(-1.f),
+    m_nuVertexAvSeparation(-1.f),
+    m_nuVertexChargeAsymmetry(-1.f),
     m_initialGapSize(-1.f),
     m_largestGapSize(-1.f),
     m_pathwayLength(-1.f),
@@ -58,7 +64,8 @@ ShowerVarManager::ShowerVars::ShowerVars() :
 
 ShowerVarManager::ShowerVarManager(const fhicl::ParameterSet& pset) :
     m_recoModuleLabel(pset.get<std::string>("RecoModuleLabel")),
-    m_showerModuleLabel(pset.get<std::string>("ShowerModuleLabel"))
+    m_showerModuleLabel(pset.get<std::string>("ShowerModuleLabel")),
+    m_hitModuleLabel(pset.get<std::string>("HitModuleLabel"))
 {
 }
 
@@ -80,6 +87,9 @@ bool ShowerVarManager::EvaluateShowerVars(const art::Event &evt, const art::Ptr<
 
     FillDisplacement(evt, shower, showerVars);
     FillConnectionPathwayVars(evt, pfparticle, showerVars);
+    FillTrackStub(evt, shower, showerVars);
+    FillNuVertexAvSeparation(evt, pfparticle, showerVars);
+    FillNuVertexChargeAsymmetry(evt, shower, showerVars);
 
     return true;
 }
@@ -98,7 +108,13 @@ void ShowerVarManager::FillDisplacement(const art::Event &evt, const art::Ptr<re
     const TVector3 showerStart = TVector3(shower->ShowerStart().X(), shower->ShowerStart().Y(), shower->ShowerStart().Z());
     const float displacement = (nuVertexPosition - showerStart).Mag();
 
+    // DCA
+    const double alpha = std::fabs((shower->ShowerStart() - nuVertexPosition).Dot(shower->Direction()));
+    const TVector3 r = shower->ShowerStart() - (alpha * shower->Direction());
+    const float dca = (r - nuVertexPosition).Mag();
+
     showerVars.SetDisplacement(displacement);
+    showerVars.SetDCA(dca);
 }
 
 /////////////////////////////////////////////////////////////
@@ -128,9 +144,160 @@ void ShowerVarManager::FillConnectionPathwayVars(const art::Event &evt, const ar
 
 /////////////////////////////////////////////////////////////
 
+void ShowerVarManager::FillTrackStub(const art::Event &evt, const art::Ptr<recob::Shower> shower, 
+    ShowerVarManager::ShowerVars &showerVars) const
+{
+    art::Handle< std::vector<recob::Shower> > showerListHandle;
+    evt.getByLabel(m_showerModuleLabel, showerListHandle);
+
+    art::FindManyP<recob::Track> initialTrackAssn(showerListHandle, evt, m_showerModuleLabel);
+    std::vector<art::Ptr<recob::Track>> initialTrackStub = initialTrackAssn.at(shower.key());
+
+    if (initialTrackStub.empty())
+        return;
+
+    const art::Ptr<recob::Track> &trackStub = initialTrackStub.front();
+
+    const float trackStubLength = std::sqrt((trackStub->Start() - trackStub->End()).Mag2());
+    showerVars.SetTrackStubLength(trackStubLength);
+}
+
+/////////////////////////////////////////////////////////////
+
+void ShowerVarManager::FillNuVertexAvSeparation(const art::Event &evt, const art::Ptr<recob::PFParticle> &pfparticle, 
+    ShowerVarManager::ShowerVars &showerVars) const
+{
+    if (!dune_ana::DUNEAnaPFParticleUtils::IsShower(pfparticle, evt, m_recoModuleLabel, m_showerModuleLabel))
+        return;
+
+    const art::Ptr<recob::Shower> shower = dune_ana::DUNEAnaPFParticleUtils::GetShower(pfparticle, evt, m_recoModuleLabel, m_showerModuleLabel);
+
+    if (!dune_ana::DUNEAnaEventUtils::GetNeutrino(evt, m_recoModuleLabel))
+        return;
+
+    auto const clockData = art::ServiceHandle<detinfo::DetectorClocksService const>()->DataFor(evt);
+    auto const detProp = art::ServiceHandle<detinfo::DetectorPropertiesService const>()->DataFor(evt, clockData);
+
+    const art::Ptr<recob::PFParticle> &nuPFP = dune_ana::DUNEAnaEventUtils::GetNeutrino(evt, m_recoModuleLabel);
+    const art::Ptr<recob::Vertex> &nuVertex = dune_ana::DUNEAnaPFParticleUtils::GetVertex(nuPFP, evt, m_recoModuleLabel);
+    const TVector3 nuVertexPosition = TVector3(nuVertex->position().X(), nuVertex->position().Y(), nuVertex->position().Z());
+    const TVector3 showerStart = TVector3(shower->ShowerStart().X(), shower->ShowerStart().Y(), shower->ShowerStart().Z());
+    const TVector3 displacement = (showerStart - nuVertexPosition).Unit();
+
+    // Calc charge weighted axis-hit separation
+    float totalCharge = 0.f;
+    float numeratorSum = 0.f;
+
+    const std::vector<art::Ptr<recob::Hit>> collectionHits = dune_ana::DUNEAnaPFParticleUtils::GetViewHits(pfparticle, evt, m_recoModuleLabel, 2);
+
+    for (const art::Ptr<recob::Hit> &hit : collectionHits)
+    {
+        const std::vector<art::Ptr<recob::SpacePoint>> &spacepoints = dune_ana::DUNEAnaHitUtils::GetSpacePoints(hit, evt, m_hitModuleLabel, m_recoModuleLabel);
+
+        if (spacepoints.empty())
+            continue;
+
+        const art::Ptr<recob::SpacePoint> spacepoint = spacepoints.front();
+
+        const TVector3 spacepointPos = TVector3(spacepoint->position().X(), spacepoint->position().Y(), spacepoint->position().Z()) - nuVertexPosition;
+        const float transverse = std::sqrt(displacement.Cross(spacepointPos).Mag2());
+        const double charge = dune_ana::DUNEAnaHitUtils::LifetimeCorrectedTotalHitCharge(clockData, detProp, {hit});
+
+        totalCharge += charge;
+        numeratorSum += (transverse * charge);
+    }
+
+    const float nuVertexAvSeparation = (totalCharge < std::numeric_limits<float>::epsilon()) ? 0.f : (numeratorSum / totalCharge);
+    showerVars.SetNuVertexAvSeparation(nuVertexAvSeparation);
+}
+
+/////////////////////////////////////////////////////////////
+
+void ShowerVarManager::FillNuVertexChargeAsymmetry(const art::Event &evt, const art::Ptr<recob::Shower> &shower, 
+    ShowerVarManager::ShowerVars &showerVars) const
+{
+    if (!dune_ana::DUNEAnaEventUtils::GetNeutrino(evt, m_recoModuleLabel))
+        return;
+
+    const art::Ptr<recob::PFParticle> &nuPFP = dune_ana::DUNEAnaEventUtils::GetNeutrino(evt, m_recoModuleLabel);
+    const art::Ptr<recob::Vertex> &nuVertex = dune_ana::DUNEAnaPFParticleUtils::GetVertex(nuPFP, evt, m_recoModuleLabel);
+    const TVector3 nuVertexPosition = TVector3(nuVertex->position().X(), nuVertex->position().Y(), nuVertex->position().Z());
+
+    // Get initial direction of the shower from the track stub
+    const TVector3 showerDirection = TVector3(shower->Direction().X(), shower->Direction().Y(), shower->Direction().Z());
+
+    const std::vector<art::Ptr<recob::Hit>> &hits = dune_ana::DUNEAnaShowerUtils::GetHits(shower, evt, m_showerModuleLabel);
+
+    std::vector<art::Ptr<recob::Hit>> hitsU, hitsV, hitsW;
+
+    for (const art::Ptr<recob::Hit> &hit : hits)
+    {
+        // Make sure 2D hit has an associated space point
+        std::vector<art::Ptr<recob::SpacePoint>> spacePoints = dune_ana::DUNEAnaHitUtils::GetSpacePoints(hit, evt, m_hitModuleLabel, m_recoModuleLabel);
+
+        if (spacePoints.empty())
+            continue;
+
+        const IvysaurusUtils::PandoraView pandoraView = IvysaurusUtils::GetPandora2DView(hit);
+
+        std::vector<art::Ptr<recob::Hit>> &hitVector = pandoraView == IvysaurusUtils::PandoraView::TPC_VIEW_U ? hitsU :
+            pandoraView == IvysaurusUtils::PandoraView::TPC_VIEW_V ? hitsV : hitsW;
+
+        hitVector.push_back(hit);
+    }
+
+    const float nuVertexChargeAsymmetryU = GetViewNuVertexChargeAsymmetry(evt, nuVertexPosition, showerDirection, hitsU, IvysaurusUtils::PandoraView::TPC_VIEW_U);
+    const float nuVertexChargeAsymmetryV = GetViewNuVertexChargeAsymmetry(evt, nuVertexPosition, showerDirection, hitsV, IvysaurusUtils::PandoraView::TPC_VIEW_V);
+    const float nuVertexChargeAsymmetryW = GetViewNuVertexChargeAsymmetry(evt, nuVertexPosition, showerDirection, hitsW, IvysaurusUtils::PandoraView::TPC_VIEW_W);
+    const float maxNuVertexChargeAsymmetry = std::max(std::max(nuVertexChargeAsymmetryU, nuVertexChargeAsymmetryV), nuVertexChargeAsymmetryW);
+
+    showerVars.SetNuVertexChargeAsymmetry(maxNuVertexChargeAsymmetry);
+}
+
+/////////////////////////////////////////////////////////////
+
+float ShowerVarManager::GetViewNuVertexChargeAsymmetry(const art::Event &evt, const TVector3 &nuVertexPosition, const TVector3 &showerDirection, 
+    const std::vector<art::Ptr<recob::Hit>> &viewHits, const IvysaurusUtils::PandoraView &pandoraView) const
+{
+    auto const clockData = art::ServiceHandle<detinfo::DetectorClocksService>()->DataFor(evt);
+    auto const detProp = art::ServiceHandle<detinfo::DetectorPropertiesService const>()->DataFor(evt);
+
+    const TVector3 viewNuVertex = IvysaurusUtils::ProjectIntoPandoraView(nuVertexPosition, pandoraView);
+    const TVector3 point2 = nuVertexPosition + (showerDirection * 10.f);
+    const TVector3 viewPoint2 = IvysaurusUtils::ProjectIntoPandoraView(point2, pandoraView);
+    const TVector3 centralAxis = (viewPoint2 - viewNuVertex).Unit();
+    const TVector3 yAxis = TVector3(0.f, 1.f, 0.f);
+    const TVector3 orthAxis = centralAxis.Cross(yAxis).Unit();
+
+    float chargeAsymmetry = 0.f;
+    float totalCharge = 0.f;
+
+    for (const art::Ptr<recob::Hit> &viewHit : viewHits)
+    {
+        const TVector3 hitPosition = IvysaurusUtils::ObtainPandoraHitPosition(evt, viewHit, pandoraView);
+        const float l = orthAxis.Dot(hitPosition - viewNuVertex);
+        float charge = std::fabs(dune_ana::DUNEAnaHitUtils::LifetimeCorrectedTotalHitCharge(clockData, detProp, {viewHit}));
+
+        totalCharge += charge;
+
+        charge *= (l < 0.f) ? -1.0 : 1.0;
+        chargeAsymmetry += charge;
+    }
+
+    chargeAsymmetry = totalCharge < std::numeric_limits<float>::epsilon() ? 0.f : (chargeAsymmetry / totalCharge);
+
+    return std::fabs(chargeAsymmetry);
+}
+
+/////////////////////////////////////////////////////////////
+
 void ShowerVarManager::Reset(ShowerVarManager::ShowerVars &showerVars) const
 {
     showerVars.SetDisplacement(-1.f);
+    showerVars.SetDCA(-1.f);
+    showerVars.SetTrackStubLength(-1.f);
+    showerVars.SetNuVertexAvSeparation(-1.f);
+    showerVars.SetNuVertexChargeAsymmetry(-1.f);
     showerVars.SetInitialGapSize(-1.f);
     showerVars.SetLargestGapSize(-1.f);
     showerVars.SetPathwayLength(-1.f);
