@@ -6,6 +6,7 @@ showervar_manager:
 {
   RecoModuleLabel:   "pandora"
   ShowerModuleLabel: "pandoraShower"
+  HitModuleLabel:    "hitfd"
 }
 
 END_PROLOG

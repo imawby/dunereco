@@ -12,9 +12,13 @@
 #include "TTree.h"
 #include "TVector3.h"
 
+#include "dunereco/Ivysaurus/TensorFlow/IvysaurusGraph.h"
+
 #include "dunereco/Ivysaurus/Managers/GridManager.h"
 #include "dunereco/Ivysaurus/Managers/TrackVarManager.h"
 #include "dunereco/Ivysaurus/Managers/ShowerVarManager.h"
+#include "dunereco/Ivysaurus/Utils/IvysaurusUtils.h"
+#include "dunereco/Ivysaurus/TensorFlow/IvysaurusGraph.h"
 
 #include <fstream>
 #include <string>
@@ -56,6 +60,8 @@ private:
   std::vector<int> m_nSpacePoints;
   std::vector<int> m_nHits2D;
 
+  std::vector<float> m_trackScore;
+
   std::vector<std::vector<double>> m_spacePoints;
   std::vector<std::vector<double>> m_projectionsU;
   std::vector<std::vector<double>> m_projectionsV;
@@ -81,15 +87,23 @@ private:
 
   // TrackVars
   std::vector<int> m_trackVarsSuccessful;
-  std::vector<int> m_nTrackChildren;
-  std::vector<int> m_nShowerChildren;
-  std::vector<int> m_nGrandChildren;
+  std::vector<float> m_nTrackChildren;
+  std::vector<float> m_nShowerChildren;
+  std::vector<float> m_nGrandChildren;
+  std::vector<float> m_nChildHits;
+  std::vector<float> m_childEnergy;
+  std::vector<float> m_childTrackScore;
   std::vector<float> m_trackLength;
   std::vector<float> m_trackWobble;
+  std::vector<float> m_trackMomComparison;
 
   // ShowerVars
   std::vector<int> m_showerVarsSuccessful;
   std::vector<float> m_showerDisplacement;
+  std::vector<float> m_DCA;
+  std::vector<float> m_trackStubLength;
+  std::vector<float> m_nuVertexAvSeparation;
+  std::vector<float> m_nuVertexChargeAsymmetry;
   std::vector<float> m_showerInitialGapSize;
   std::vector<float> m_showerLargestGapSize;
   std::vector<float> m_showerPathwayLength;
@@ -109,6 +123,7 @@ private:
   GridManager m_gridManager;
   TrackVarManager m_trackVarManager;
   ShowerVarManager m_showerVarManager;
+  IvysaurusGraph m_ivysaurusGraph;
 
   // FCL module labels
   std::string m_hitModuleLabel;
@@ -158,6 +173,7 @@ IvysaurusTrainingFiles::IvysaurusTrainingFiles(fhicl::ParameterSet const &pset) 
     m_gridManager(pset.get<fhicl::ParameterSet>("GridManager")),
     m_trackVarManager(pset.get<fhicl::ParameterSet>("TrackVarManager")),
     m_showerVarManager(pset.get<fhicl::ParameterSet>("ShowerVarManager")),
+    m_ivysaurusGraph(pset.get<fhicl::ParameterSet>("IvysaurusGraph")),
     m_hitModuleLabel(pset.get<std::string>("HitModuleLabel")),
     m_recoModuleLabel(pset.get<std::string>("RecoModuleLabel")),
     m_completenessThreshold(pset.get<float>("CompletenessThreshold")),
@@ -236,6 +252,30 @@ void IvysaurusTrainingFiles::analyze(const art::Event &evt)
             continue;
         }
 
+        // If it isn't a PDG that we care about, move on...
+        int absPDG = std::abs(m_truePDG.back());
+
+
+        std::cout << "absPDG: " << absPDG << std::endl;
+
+        if ((absPDG != 13) && (absPDG != 2212) && (absPDG != 211) && (absPDG != 11) & (absPDG != 22))
+            continue;
+
+        std::cout << "BBBBBBBB" << std::endl;
+
+        ////////////////////////////////////////////                                                                                                                                                                                    
+        // Now, get the track score... 
+        ////////////////////////////////////////////  
+        const art::Ptr<larpandoraobj::PFParticleMetadata> &metadata = dune_ana::DUNEAnaPFParticleUtils::GetMetadata(pfparticle, evt, m_recoModuleLabel);
+        const auto metaMap = metadata->GetPropertiesMap();
+
+        if (metaMap.find("TrackScore") == metaMap.end())
+            continue;
+
+        const float trackScore = metaMap.at("TrackScore");
+
+        m_trackScore.push_back(trackScore);
+
         ////////////////////////////////////////////                                                                                                                                                                                    
         // Now, get space points into file.. 
         ////////////////////////////////////////////  
@@ -250,10 +290,13 @@ void IvysaurusTrainingFiles::analyze(const art::Event &evt)
         m_nSpacePoints.push_back(spacepoints.size());
         m_nHits2D.push_back(pfpHits.size());
 
-
         ////////////////////////////////////////////                                                                                                                                                                                    
         // Now, apply quality cuts
         ////////////////////////////////////////////  
+
+        std::cout << "m_completeness: " << m_completeness.back() << std::endl;
+        std::cout << "m_purity: " << m_purity.back() << std::endl;
+        std::cout << "spacepoints.size(): " << spacepoints.size() << std::endl;
 
         if ((m_completeness.back() < m_completenessThreshold) || (m_purity.back() < m_purityThreshold) || (spacepoints.size() < m_nSpacepointThreshold))
             continue;
@@ -264,7 +307,15 @@ void IvysaurusTrainingFiles::analyze(const art::Event &evt)
 
         int nInitialisedGrids(0);
 
-        for (GridManager::PandoraView pandoraView : {GridManager::PandoraView::TPC_VIEW_U, GridManager::PandoraView::TPC_VIEW_V, GridManager::PandoraView::TPC_VIEW_W})
+
+        ////////////////////////////////////////////                                                                                                                                                                                    
+        // just have this here for a bit...
+        ////////////////////////////////////////////  
+        m_ivysaurusGraph.IvysaurusUseEvaluate(evt, pfparticle);
+
+
+
+        for (IvysaurusUtils::PandoraView pandoraView : {IvysaurusUtils::PandoraView::TPC_VIEW_U, IvysaurusUtils::PandoraView::TPC_VIEW_V, IvysaurusUtils::PandoraView::TPC_VIEW_W})
         {
             GridManager::Grid startGrid = m_gridManager.ObtainViewGrid(evt, pfparticle, pandoraView, true);
             GridManager::Grid endGrid = m_gridManager.ObtainViewGrid(evt, pfparticle, pandoraView, false);
@@ -277,28 +328,33 @@ void IvysaurusTrainingFiles::analyze(const art::Event &evt)
             ////////////////////////////////////////////
             // Let's fill the hit vectors...
             ////////////////////////////////////////////
-            if (m_writeVisualisationInfo)
+            std::vector<std::vector<double>> &projections = pandoraView == IvysaurusUtils::PandoraView::TPC_VIEW_U ? m_projectionsU :
+                pandoraView == IvysaurusUtils::PandoraView::TPC_VIEW_V ? m_projectionsV : m_projectionsW;
+
+            for (const art::Ptr<recob::Hit> hit : pfpHits)
             {
-                std::vector<std::vector<double>> &projections = pandoraView == GridManager::PandoraView::TPC_VIEW_U ? m_projectionsU :
-                    pandoraView == GridManager::PandoraView::TPC_VIEW_V ? m_projectionsV : m_projectionsW;
+                // Make sure 2D hit has an associated space point
+                std::vector<art::Ptr<recob::SpacePoint>> spacePoints = dune_ana::DUNEAnaHitUtils::GetSpacePoints(hit, evt, m_hitModuleLabel, m_recoModuleLabel);
 
-                for (const art::Ptr<recob::Hit> hit : pfpHits)
+                if (spacePoints.empty())
+                    continue;
+
+                const IvysaurusUtils::PandoraView thisPandoraView = IvysaurusUtils::GetPandora2DView(hit);
+
+                if (thisPandoraView != pandoraView)
+                    continue;
+
+                // Get 2D hit position
+                const TVector3 pandoraHitPosition = IvysaurusUtils::ObtainPandoraHitPosition(evt, hit, pandoraView);
+                
+                if (m_writeVisualisationInfo)
                 {
-                    // Make sure 2D hit has an associated space point
-                    std::vector<art::Ptr<recob::SpacePoint>> spacePoints = dune_ana::DUNEAnaHitUtils::GetSpacePoints(hit, evt, m_hitModuleLabel, m_recoModuleLabel);
-
-                    if (spacePoints.empty())
-                        continue;
-                     
-                    const GridManager::PandoraView thisPandoraView = m_gridManager.GetPandora2DView(hit);
-
-                    if (thisPandoraView != pandoraView)
-                        continue;
-
-                    // Get 2D hit position
-                    const TVector3 pandoraHitPosition = m_gridManager.ObtainPandoraHitPosition(evt, hit, pandoraView);
-
                     projections.push_back({pandoraHitPosition.X(), pandoraHitPosition.Y(), pandoraHitPosition.Z()});
+                }
+                else
+                {
+                    if (startGrid.IsInsideGrid(pandoraHitPosition) || endGrid.IsInsideGrid(pandoraHitPosition))
+                        projections.push_back({pandoraHitPosition.X(), pandoraHitPosition.Y(), pandoraHitPosition.Z()});
                 }
             }
 
@@ -308,23 +364,23 @@ void IvysaurusTrainingFiles::analyze(const art::Event &evt)
             m_gridManager.FillViewGrid(evt, pfparticle, startGrid);
             m_gridManager.FillViewGrid(evt, pfparticle, endGrid);
 
-            std::vector<float> &startDriftBoundaries = pandoraView == GridManager::PandoraView::TPC_VIEW_U ? m_startDriftBoundariesU :
-                pandoraView == GridManager::PandoraView::TPC_VIEW_V ? m_startDriftBoundariesV : m_startDriftBoundariesW;
+            std::vector<float> &startDriftBoundaries = pandoraView == IvysaurusUtils::PandoraView::TPC_VIEW_U ? m_startDriftBoundariesU :
+                pandoraView == IvysaurusUtils::PandoraView::TPC_VIEW_V ? m_startDriftBoundariesV : m_startDriftBoundariesW;
 
-            std::vector<float> &endDriftBoundaries = pandoraView == GridManager::PandoraView::TPC_VIEW_U ? m_endDriftBoundariesU :
-                pandoraView == GridManager::PandoraView::TPC_VIEW_V ? m_endDriftBoundariesV : m_endDriftBoundariesW;
+            std::vector<float> &endDriftBoundaries = pandoraView == IvysaurusUtils::PandoraView::TPC_VIEW_U ? m_endDriftBoundariesU :
+                pandoraView == IvysaurusUtils::PandoraView::TPC_VIEW_V ? m_endDriftBoundariesV : m_endDriftBoundariesW;
 
-            std::vector<float> &startWireBoundaries = pandoraView == GridManager::PandoraView::TPC_VIEW_U ? m_startWireBoundariesU : 
-                pandoraView == GridManager::PandoraView::TPC_VIEW_V ? m_startWireBoundariesV : m_startWireBoundariesW;
+            std::vector<float> &startWireBoundaries = pandoraView == IvysaurusUtils::PandoraView::TPC_VIEW_U ? m_startWireBoundariesU : 
+                pandoraView == IvysaurusUtils::PandoraView::TPC_VIEW_V ? m_startWireBoundariesV : m_startWireBoundariesW;
 
-            std::vector<float> &endWireBoundaries = pandoraView == GridManager::PandoraView::TPC_VIEW_U ? m_endWireBoundariesU : 
-                pandoraView == GridManager::PandoraView::TPC_VIEW_V ? m_endWireBoundariesV : m_endWireBoundariesW;
+            std::vector<float> &endWireBoundaries = pandoraView == IvysaurusUtils::PandoraView::TPC_VIEW_U ? m_endWireBoundariesU : 
+                pandoraView == IvysaurusUtils::PandoraView::TPC_VIEW_V ? m_endWireBoundariesV : m_endWireBoundariesW;
 
-            std::vector<std::vector<float>> &startGridValues = pandoraView == GridManager::PandoraView::TPC_VIEW_U ? m_startGridValuesU : 
-                pandoraView == GridManager::PandoraView::TPC_VIEW_V ? m_startGridValuesV : m_startGridValuesW;
+            std::vector<std::vector<float>> &startGridValues = pandoraView == IvysaurusUtils::PandoraView::TPC_VIEW_U ? m_startGridValuesU : 
+                pandoraView == IvysaurusUtils::PandoraView::TPC_VIEW_V ? m_startGridValuesV : m_startGridValuesW;
 
-            std::vector<std::vector<float>> &endGridValues = pandoraView == GridManager::PandoraView::TPC_VIEW_U ? m_endGridValuesU : 
-                pandoraView == GridManager::PandoraView::TPC_VIEW_V ? m_endGridValuesV : m_endGridValuesW;
+            std::vector<std::vector<float>> &endGridValues = pandoraView == IvysaurusUtils::PandoraView::TPC_VIEW_U ? m_endGridValuesU : 
+                pandoraView == IvysaurusUtils::PandoraView::TPC_VIEW_V ? m_endGridValuesV : m_endGridValuesW;
 
             startDriftBoundaries = startGrid.GetDriftBoundaries();
             endDriftBoundaries = endGrid.GetDriftBoundaries();
@@ -346,9 +402,12 @@ void IvysaurusTrainingFiles::analyze(const art::Event &evt)
         m_nTrackChildren.push_back(trackVars.GetNTrackChildren());
         m_nShowerChildren.push_back(trackVars.GetNShowerChildren());
         m_nGrandChildren.push_back(trackVars.GetNGrandChildren());
+        m_nChildHits.push_back(trackVars.GetNChildHits());
+        m_childEnergy.push_back(trackVars.GetChildEnergy());
+        m_childTrackScore.push_back(trackVars.GetChildTrackScore());
         m_trackLength.push_back(trackVars.GetTrackLength());
         m_trackWobble.push_back(trackVars.GetWobble());
-
+        m_trackMomComparison.push_back(trackVars.GetMomentumComparison());
 
         ////////////////////////////////////////////                                                                                                                                                                                    
         // Now fill the shower variables
@@ -356,6 +415,10 @@ void IvysaurusTrainingFiles::analyze(const art::Event &evt)
         ShowerVarManager::ShowerVars showerVars;
         m_showerVarsSuccessful.push_back(m_showerVarManager.EvaluateShowerVars(evt, pfparticle, showerVars) ? 1 : 0);
         m_showerDisplacement.push_back(showerVars.GetDisplacement());
+        m_DCA.push_back(showerVars.GetDCA());
+        m_trackStubLength.push_back(showerVars.GetTrackStubLength());
+        m_nuVertexAvSeparation.push_back(showerVars.GetNuVertexAvSeparation());
+        m_nuVertexChargeAsymmetry.push_back(showerVars.GetNuVertexChargeAsymmetry());
         m_showerInitialGapSize.push_back(showerVars.GetInitialGapSize());
         m_showerLargestGapSize.push_back(showerVars.GetLargestGapSize());
         m_showerPathwayLength.push_back(showerVars.GetPathwayLength());
@@ -392,6 +455,8 @@ void IvysaurusTrainingFiles::Reset()
   m_nSpacePoints.clear();
   m_nHits2D.clear();
 
+  m_trackScore.clear();
+
   m_spacePoints.clear();
   m_projectionsU.clear();
   m_projectionsV.clear();
@@ -419,11 +484,19 @@ void IvysaurusTrainingFiles::Reset()
   m_nTrackChildren.clear();
   m_nShowerChildren.clear();
   m_nGrandChildren.clear();
+  m_nChildHits.clear();
+  m_childEnergy.clear();
+  m_childTrackScore.clear();
   m_trackLength.clear();
   m_trackWobble.clear();
+  m_trackMomComparison.clear();
 
   m_showerVarsSuccessful.clear();
   m_showerDisplacement.clear();
+  m_DCA.clear();
+  m_trackStubLength.clear();
+  m_nuVertexAvSeparation.clear();
+  m_nuVertexChargeAsymmetry.clear();
   m_showerInitialGapSize.clear();
   m_showerLargestGapSize.clear();
   m_showerPathwayLength.clear();
@@ -451,11 +524,16 @@ void IvysaurusTrainingFiles::beginJob()
     m_tree->Branch("Run", &m_run);
     m_tree->Branch("Subrun", &m_subrun);
     m_tree->Branch("Event", &m_event);
+
     m_tree->Branch("TruePDG", &m_truePDG);
     m_tree->Branch("Completeness", &m_completeness);
     m_tree->Branch("Purity", &m_purity);
+
     m_tree->Branch("NSpacePoints", &m_nSpacePoints);
     m_tree->Branch("NHits2D", &m_nHits2D);
+
+    m_tree->Branch("TrackScore", &m_trackScore);
+
     m_tree->Branch("SpacePoints", &m_spacePoints);
     m_tree->Branch("ProjectionsU", &m_projectionsU);
     m_tree->Branch("ProjectionsV", &m_projectionsV);
@@ -483,11 +561,19 @@ void IvysaurusTrainingFiles::beginJob()
     m_tree->Branch("NTrackChildren", &m_nTrackChildren);
     m_tree->Branch("NShowerChildren", &m_nShowerChildren);
     m_tree->Branch("NGrandChildren", &m_nGrandChildren);
+    m_tree->Branch("NChildHits", &m_nChildHits);
+    m_tree->Branch("ChildEnergy", &m_childEnergy);
+    m_tree->Branch("ChildTrackScore", &m_childTrackScore);
     m_tree->Branch("TrackLength", &m_trackLength);
     m_tree->Branch("TrackWobble", &m_trackWobble);
+    m_tree->Branch("TrackMomComparison", &m_trackMomComparison);
 
     m_tree->Branch("ShowerVarsSuccessful", &m_showerVarsSuccessful);
     m_tree->Branch("ShowerDisplacement", &m_showerDisplacement);
+    m_tree->Branch("ShowerDCA", &m_DCA);
+    m_tree->Branch("ShowerTrackStubLength", &m_trackStubLength);
+    m_tree->Branch("ShowerNuVertexAvSeparation", &m_nuVertexAvSeparation);
+    m_tree->Branch("ShowerNuVertexChargeAsymmetry", &m_nuVertexChargeAsymmetry);
     m_tree->Branch("ShowerInitialGapSize", &m_showerInitialGapSize);
     m_tree->Branch("ShowerLargestGapSize", &m_showerLargestGapSize);
     m_tree->Branch("ShowerPathwayLength", &m_showerPathwayLength);

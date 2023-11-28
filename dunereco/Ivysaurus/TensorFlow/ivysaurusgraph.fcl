@@ -1,0 +1,15 @@
+#include "gridmanager.fcl"
+#include "trackvarmanager.fcl"
+
+BEGIN_PROLOG
+
+ivysaurus_graph:
+{
+  GridManager:            @local::grid_manager
+  TrackVarManager:        @local::trackvar_manager
+  NetworkDirectory:       "/dune/app/users/imawby/larsoft_v09_79_00d02/srcs/dunereco/dunereco/Ivysaurus/TensorFlow/my_model/"
+  NTrackVars:              10
+  RecoModuleLabel:        "pandora"
+}
+
+END_PROLOG

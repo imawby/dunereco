@@ -30,6 +30,8 @@ art_make(
     larpandora_LArPandoraInterface
     ROOT_BASIC_LIB_LIST
     dunereco_AnaUtils
+    larreco_RecoAlg
+    dunereco_Ivysaurus_Utils
 )
 
 install_headers()

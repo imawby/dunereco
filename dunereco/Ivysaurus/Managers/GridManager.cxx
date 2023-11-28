@@ -15,7 +15,6 @@
 #include "canvas/Persistency/Common/FindManyP.h"
 
 #include "larcore/Geometry/Geometry.h"
-
 #include "larcorealg/Geometry/PlaneGeo.h"
 #include "larcorealg/Geometry/TPCGeo.h"
 
@@ -30,6 +29,7 @@
 #include "larreco/Calorimetry/CalorimetryAlg.h"
 
 #include "dunereco/Ivysaurus/Managers/GridManager.h"
+#include "dunereco/Ivysaurus/Utils/IvysaurusUtils.h"
 #include "dunereco/AnaUtils/DUNEAnaPFParticleUtils.h"
 #include "dunereco/AnaUtils/DUNEAnaHitUtils.h"
 
@@ -38,7 +38,7 @@ namespace ivysaurus
 {
 
 GridManager::Grid::Grid(const TVector3 origin, const float driftSpan, const float wireSpan, 
-    const unsigned int dimensions, const GridManager::PandoraView pandoraView, const bool isInitialised) : 
+    const unsigned int dimensions, const IvysaurusUtils::PandoraView pandoraView, const bool isInitialised) : 
         m_axisDimensions(dimensions),
         m_pandoraView(pandoraView),
         m_isInitialised(isInitialised)
@@ -84,17 +84,23 @@ void GridManager::Grid::AddToGrid(const TVector3 &position, const float energy, 
 {
     // Get drift bin
     const float driftInterval = std::fabs(m_driftBoundaries.at(0) - m_driftBoundaries.at(1));
-    const unsigned int driftBin = std::floor(std::fabs(position.X() - m_driftBoundaries.front()) / driftInterval); 
+    const unsigned int driftBin = std::fabs(position.X() - m_driftBoundaries.front()) < std::numeric_limits<float>::epsilon() ? 0 : 
+        std::fabs(position.X() - m_driftBoundaries.back()) < std::numeric_limits<float>::epsilon() ? (m_axisDimensions - 1) :
+        std::floor(std::fabs(position.X() - m_driftBoundaries.front()) / driftInterval); 
 
+    // Can get some annoying floating point precision instances
     if (driftBin >= m_axisDimensions)
-        throw cet::exception("ivysaur::GridManager") << "the bin does not exist!";
+        return;
 
     // Get wire bin
     const float wireInterval = std::fabs(m_wireBoundaries.at(0) - m_wireBoundaries.at(1));
-    const unsigned int wireBin = std::floor(std::fabs(position.Z() - m_wireBoundaries.front()) / wireInterval); 
+    const unsigned int wireBin = std::fabs(position.Z() - m_wireBoundaries.front()) < std::numeric_limits<float>::epsilon() ? 0 : 
+        std::fabs(position.Z() - m_wireBoundaries.back()) < std::numeric_limits<float>::epsilon() ? (m_axisDimensions - 1) :
+        std::floor(std::fabs(position.Z() - m_wireBoundaries.front()) / wireInterval); 
 
+    // Can get some annoying floating point precision instances
     if (wireBin >= m_axisDimensions)
-        throw cet::exception("ivysaur::GridManager") << "the bin does not exist!";
+        return;
 
     // Now fill grid
     m_gridValues[driftBin][wireBin] += energy;
@@ -133,9 +139,6 @@ GridManager::GridManager(const fhicl::ParameterSet& pset) :
     m_showerModuleLabel(pset.get<std::string>("ShowerModuleLabel")),
     m_gridSize3D(pset.get<float>("GridSize3D")),
     m_dimensions(pset.get<float>("GridDimensions")),
-    m_uWireAngle(pset.get<float>("UWireAngle")), //radians
-    m_vWireAngle(pset.get<float>("VWireAngle")), // radians
-    m_wWireAngle(pset.get<float>("WWireAngle")), // radians
     m_recombFactor(pset.get<float>("RecombFactor")),
     m_calorimetryAlg(pset.get<fhicl::ParameterSet>("CalorimetryAlg"))
 {
@@ -150,7 +153,7 @@ GridManager::~GridManager()
 /////////////////////////////////////////////////////////////
 
 GridManager::Grid GridManager::ObtainViewGrid(const art::Event &evt, const art::Ptr<recob::PFParticle> &pfparticle, 
-    const GridManager::PandoraView pandoraView, const bool isStart) const
+    const IvysaurusUtils::PandoraView pandoraView, const bool isStart) const
 {
     const art::Ptr<larpandoraobj::PFParticleMetadata> &metadata = dune_ana::DUNEAnaPFParticleUtils::GetMetadata(pfparticle, evt, m_recoModuleLabel);
     const auto metaMap = metadata->GetPropertiesMap();
@@ -308,7 +311,7 @@ void GridManager::FillViewGrid(const art::Event &evt, const art::Ptr<recob::PFPa
     // Get 2D hits for Pandora view..
     const std::vector<art::Ptr<recob::Hit>> pfpHits = dune_ana::DUNEAnaPFParticleUtils::GetHits(pfparticle, evt, m_recoModuleLabel);
 
-    PandoraView pandoraView = grid.GetPandoraView();
+    IvysaurusUtils::PandoraView pandoraView = grid.GetPandoraView();
 
     for (const art::Ptr<recob::Hit> hit : pfpHits)
     {
@@ -318,13 +321,13 @@ void GridManager::FillViewGrid(const art::Event &evt, const art::Ptr<recob::PFPa
         if (spacePoints.empty())
             continue;
                      
-        const PandoraView thisPandoraView = GetPandora2DView(hit);
+        const IvysaurusUtils::PandoraView thisPandoraView = IvysaurusUtils::GetPandora2DView(hit);
 
         if (thisPandoraView != pandoraView)
             continue;
 
         // Get 2D hit position
-        const TVector3 pandoraHitPosition = ObtainPandoraHitPosition(evt, hit, pandoraView);
+        const TVector3 pandoraHitPosition = IvysaurusUtils::ObtainPandoraHitPosition(evt, hit, pandoraView);
 
         if (!grid.IsInsideGrid(pandoraHitPosition))
             continue;
@@ -343,86 +346,14 @@ void GridManager::FillViewGrid(const art::Event &evt, const art::Ptr<recob::PFPa
 
 float GridManager::ObtainHitEnergy(const art::Event &evt, const art::Ptr<recob::Hit> &hit) const
 {
-    art::ServiceHandle<geo::Geometry const> theGeometry;
     auto const clockData = art::ServiceHandle<detinfo::DetectorClocksService>()->DataFor(evt);
     auto const detProp = art::ServiceHandle<detinfo::DetectorPropertiesService const>()->DataFor(evt);
 
     const double charge = dune_ana::DUNEAnaHitUtils::LifetimeCorrectedTotalHitCharge(clockData, detProp, {hit});
-    const double nElectrons = m_calorimetryAlg.ElectronsFromADCArea(charge,hit->WireID().Plane);
+    const double nElectrons = m_calorimetryAlg.ElectronsFromADCArea(charge, hit->WireID().Plane);
     const double hitEnergy = nElectrons / m_recombFactor / util::kGeVToElectrons;
 
     return hitEnergy;
 }
-
-/////////////////////////////////////////////////////////////
-
-const TVector3 GridManager::ObtainPandoraHitPosition(const art::Event &evt, const art::Ptr<recob::Hit> hit, 
-    const GridManager::PandoraView hitType) const
-{
-    art::ServiceHandle<geo::Geometry const> theGeometry;
-    auto const detProp = art::ServiceHandle<detinfo::DetectorPropertiesService const>()->DataFor(evt);
-
-    const geo::WireID hitWireID = hit->WireID();
-    const geo::CryostatID cryostatID(hitWireID.Cryostat);
-    const double hitTime = hit->PeakTime();
-    const double xCoord = detProp.ConvertTicksToX(hitTime, hitWireID.Plane, hitWireID.TPC, hitWireID.Cryostat);
-
-    // Get hit Y and Z coordinates, based on central position of wire
-    geo::Point_t xyz = theGeometry->Cryostat(cryostatID).TPC(hitWireID.TPC).Plane(hitWireID.Plane).Wire(hitWireID.Wire).GetCenter();
-
-    return TVector3(xCoord, 0.f, hitType == TPC_VIEW_U ? YZToU(xyz.Y(), xyz.Z()) : hitType == TPC_VIEW_V ? YZToV(xyz.Y(), xyz.Z()) : YZToW(xyz.Y(), xyz.Z()));
-}
-
-/////////////////////////////////////////////////////////////
-
-const TVector3 GridManager::ProjectIntoPandoraView(const TVector3 &inputPosition3D, const GridManager::PandoraView pandoraView) const
-{
-    const float xCoord = inputPosition3D.X();
-    const float yCoord = inputPosition3D.Y();
-    const float zCoord = inputPosition3D.Z();
-
-    return TVector3(xCoord, 0.f, pandoraView == TPC_VIEW_U ? YZToU(yCoord, zCoord) : pandoraView == TPC_VIEW_V ? YZToV(yCoord, zCoord) : YZToW(yCoord, zCoord));
-}
-
-/////////////////////////////////////////////////////////////
-
-float GridManager::YZToU(const float yCoord, const float zCoord) const
-{
-    return (zCoord * std::cos(m_uWireAngle)) - (yCoord * std::sin(m_uWireAngle));
-}
-
-/////////////////////////////////////////////////////////////
-
-float GridManager::YZToV(const float yCoord, const float zCoord) const
-{
-    return (zCoord * std::cos(m_vWireAngle)) - (yCoord * std::sin(m_vWireAngle));
-}
-
-/////////////////////////////////////////////////////////////
-
-float GridManager::YZToW(const float yCoord, const float zCoord) const
-{
-    return (zCoord * std::cos(m_wWireAngle)) - (yCoord * std::sin(m_wWireAngle));
-}
-
-/////////////////////////////////////////////////////////////
-
-const GridManager::PandoraView GridManager::GetPandora2DView(const art::Ptr<recob::Hit> &hit) const
-{
-    const geo::WireID hitWireID(hit->WireID());
-    const geo::View_t hitView(hit->View());
-    const geo::View_t thisPandoraView(lar_pandora::LArPandoraGeometry::GetGlobalView(hitWireID.Cryostat, hitWireID.TPC, hitView));
-
-    if (thisPandoraView == geo::kW || thisPandoraView == geo::kY)
-        return TPC_VIEW_W;
-    else if (thisPandoraView == geo::kU)
-        return TPC_VIEW_U;
-    else if (thisPandoraView == geo::kV)
-        return TPC_VIEW_V;
-    else
-        throw cet::exception("ivysaur::GridManager") << "wire view not recognised";
-}
-
-/////////////////////////////////////////////////////////////
 
 }

@@ -9,10 +9,7 @@ grid_manager:
   TrackModuleLabel: "pandoraTrack"
   ShowerModuleLabel: "pandoraShower"
   GridSize3D:        25.0
-  GridDimensions:    12
-  UWireAngle:        0.623257100582
-  VWireAngle:        -0.623257100582
-  WWireAngle:        0.0
+  GridDimensions:    24
   RecombFactor:      0.63
   CalorimetryAlg:    @local::dune10kt_calorimetryalgmc
 }

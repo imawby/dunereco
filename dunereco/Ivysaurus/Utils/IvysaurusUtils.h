@@ -29,11 +29,32 @@
 
 namespace IvysaurusUtils
 {
-double CompletenessFromTrueParticleID(detinfo::DetectorClocksData const& clockData, const std::vector<art::Ptr<recob::Hit>> &selectedHits, 
-    const std::vector<art::Ptr<recob::Hit>> &eventHits, const int trackID);
+    enum PandoraView {TPC_VIEW_U, TPC_VIEW_V, TPC_VIEW_W};
 
-double HitPurityFromTrueParticleID(detinfo::DetectorClocksData const& clockData, const std::vector<art::Ptr<recob::Hit>> &selectedHits,
-    const int trackID);
+    // Function to project a 3D coordinate into a specified Pandora 2D view
+    const TVector3 ProjectIntoPandoraView(const TVector3 &inputPosition3D, const PandoraView pandoraView);
+
+    // Function to obtain the Pandora view of a LArSoft hit
+    const PandoraView GetPandora2DView(const art::Ptr<recob::Hit> &hit);
+
+    // Function to find the 2D Pandora coordinate of a LArSoft hit
+    const TVector3 ObtainPandoraHitPosition(const art::Event &evt, const art::Ptr<recob::Hit> hit, 
+        const PandoraView hitType);
+
+    // Function to obtain the Pandora U coordinate from LArSoft Y/Z coordinates
+    float YZToU(const float yCoord, const float zCoord);
+
+    // Function to obtain the Pandora V coordinate from LArSoft Y/Z coordinates
+    float YZToV(const float yCoord, const float zCoord);
+
+    // Function to obtain the Pandora W coordinate from LArSoft Y/Z coordinates
+    float YZToW(const float yCoord, const float zCoord);
+
+    double CompletenessFromTrueParticleID(detinfo::DetectorClocksData const& clockData, const std::vector<art::Ptr<recob::Hit>> &selectedHits, 
+        const std::vector<art::Ptr<recob::Hit>> &eventHits, const int trackID);
+
+    double HitPurityFromTrueParticleID(detinfo::DetectorClocksData const& clockData, const std::vector<art::Ptr<recob::Hit>> &selectedHits,
+        const int trackID);
 }
 
 #endif
