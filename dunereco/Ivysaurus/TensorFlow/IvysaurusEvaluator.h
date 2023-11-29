@@ -1,5 +1,5 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////
-//// Class:       IvysaurusGraph
+//// Class:       IvysaurusEvaluator
 //// Authors:     R.Sulej (Robert.Sulej@cern.ch), from DUNE, FNAL/NCBJ, Sept. 2017
 ///               P.Plonski,                      from DUNE, WUT, Sept. 2017
 ////              S. Alonso Monsalve,             from DUNE, CERN, Aug. 2018
@@ -7,8 +7,8 @@
 ////
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
-#ifndef IVYSAURUSGRAPH_H
-#define IVYSAURUSGRAPH_H
+#ifndef IVYSAURUSEVALUATOR_H
+#define IVYSAURUSEVALUATOR_H
 
 #include <memory>
 #include <vector>
@@ -29,7 +29,7 @@
 namespace ivysaurus
 {
 
-class IvysaurusGraph
+class IvysaurusEvaluator
 {
   struct IvysaurusScores
   {
@@ -45,7 +45,7 @@ class IvysaurusGraph
   };
 
 public:
-    IvysaurusGraph(fhicl::ParameterSet const &pset);
+    IvysaurusEvaluator(fhicl::ParameterSet const &pset);
 
     void IvysaurusUseEvaluate(const art::Event &evt, const art::Ptr<recob::PFParticle> &pfparticle);
 
@@ -68,4 +68,4 @@ private:
 
 } // namespace ivysaurus
 
-#endif // IVYSAURUSGRAPH_H
+#endif // IVYSAURUSEVALUATOR_H

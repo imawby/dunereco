@@ -37,6 +37,7 @@ class ShowerVarManager
       float GetTrackStubLength() const;
       float GetNuVertexAvSeparation() const;
       float GetNuVertexChargeAsymmetry() const;
+      float GetFoundConnectionPathway() const;
       float GetInitialGapSize() const;
       float GetLargestGapSize() const;
       float GetPathwayLength() const;
@@ -57,6 +58,7 @@ class ShowerVarManager
       void SetTrackStubLength(const float trackStubLength);
       void SetNuVertexAvSeparation(const float nuVertexAvSeparation);
       void SetNuVertexChargeAsymmetry(const float nuVertexChargeAsymmetry);
+      void SetFoundConnectionPathway(const float foundConnectionPathway);
       void SetInitialGapSize(const float initialGapSize);
       void SetLargestGapSize(const float largestGapSize);
       void SetPathwayLength(const float pathwayLength);
@@ -78,6 +80,7 @@ class ShowerVarManager
       float m_trackStubLength;
       float m_nuVertexAvSeparation;
       float m_nuVertexChargeAsymmetry;
+      float m_foundConnectionPathway;
       float m_initialGapSize;
       float m_largestGapSize;
       float m_pathwayLength;
@@ -151,6 +154,13 @@ inline float ShowerVarManager::ShowerVars::GetNuVertexAvSeparation() const
 inline float ShowerVarManager::ShowerVars::GetNuVertexChargeAsymmetry() const
 {
     return m_nuVertexChargeAsymmetry;
+}
+
+/////////////////////////////////////////////////////////////
+
+inline float ShowerVarManager::ShowerVars::GetFoundConnectionPathway() const
+{
+    return m_foundConnectionPathway;
 }
 
 /////////////////////////////////////////////////////////////
@@ -284,6 +294,13 @@ inline void ShowerVarManager::ShowerVars::SetNuVertexAvSeparation(const float nu
 inline void ShowerVarManager::ShowerVars::SetNuVertexChargeAsymmetry(const float nuVertexChargeAsymmetry)
 {
     m_nuVertexChargeAsymmetry = nuVertexChargeAsymmetry;
+}
+
+/////////////////////////////////////////////////////////////
+
+inline void ShowerVarManager::ShowerVars::SetFoundConnectionPathway(const float foundConnectionPathway) 
+{
+    m_foundConnectionPathway = foundConnectionPathway;
 }
 
 /////////////////////////////////////////////////////////////

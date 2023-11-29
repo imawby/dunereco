@@ -42,6 +42,7 @@ ShowerVarManager::ShowerVars::ShowerVars() :
     m_trackStubLength(-1.f),
     m_nuVertexAvSeparation(-1.f),
     m_nuVertexChargeAsymmetry(-1.f),
+    m_foundConnectionPathway(0.f),
     m_initialGapSize(-1.f),
     m_largestGapSize(-1.f),
     m_pathwayLength(-1.f),
@@ -125,6 +126,7 @@ void ShowerVarManager::FillConnectionPathwayVars(const art::Event &evt, const ar
     const art::Ptr<larpandoraobj::PFParticleMetadata> &metadata = dune_ana::DUNEAnaPFParticleUtils::GetMetadata(pfparticle, evt, m_recoModuleLabel);
     const larpandoraobj::PFParticleMetadata::PropertiesMap &propertyMap = metadata->GetPropertiesMap();
 
+    if (propertyMap.find("FoundConnectionPathway") != propertyMap.end()) showerVars.SetFoundConnectionPathway(propertyMap.at("FoundConnectionPathway") ? 1.f : 0.f);
     if (propertyMap.find("MaxInitialGapSize") != propertyMap.end()) showerVars.SetInitialGapSize(propertyMap.at("MaxInitialGapSize"));
     if (propertyMap.find("MinLargestProjectedGapSize") != propertyMap.end()) showerVars.SetLargestGapSize(propertyMap.at("MinLargestProjectedGapSize"));
     if (propertyMap.find("PathwayLengthMin") != propertyMap.end()) showerVars.SetPathwayLength(propertyMap.at("PathwayLengthMin"));

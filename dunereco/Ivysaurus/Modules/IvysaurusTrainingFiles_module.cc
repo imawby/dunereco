@@ -12,13 +12,11 @@
 #include "TTree.h"
 #include "TVector3.h"
 
-#include "dunereco/Ivysaurus/TensorFlow/IvysaurusGraph.h"
-
 #include "dunereco/Ivysaurus/Managers/GridManager.h"
 #include "dunereco/Ivysaurus/Managers/TrackVarManager.h"
 #include "dunereco/Ivysaurus/Managers/ShowerVarManager.h"
 #include "dunereco/Ivysaurus/Utils/IvysaurusUtils.h"
-#include "dunereco/Ivysaurus/TensorFlow/IvysaurusGraph.h"
+#include "dunereco/Ivysaurus/TensorFlow/IvysaurusEvaluator.h"
 
 #include <fstream>
 #include <string>
@@ -104,6 +102,7 @@ private:
   std::vector<float> m_trackStubLength;
   std::vector<float> m_nuVertexAvSeparation;
   std::vector<float> m_nuVertexChargeAsymmetry;
+  std::vector<float> m_showerFoundConnectionPathway;
   std::vector<float> m_showerInitialGapSize;
   std::vector<float> m_showerLargestGapSize;
   std::vector<float> m_showerPathwayLength;
@@ -123,7 +122,7 @@ private:
   GridManager m_gridManager;
   TrackVarManager m_trackVarManager;
   ShowerVarManager m_showerVarManager;
-  IvysaurusGraph m_ivysaurusGraph;
+  IvysaurusEvaluator m_ivysaurusEvaluator;
 
   // FCL module labels
   std::string m_hitModuleLabel;
@@ -173,7 +172,7 @@ IvysaurusTrainingFiles::IvysaurusTrainingFiles(fhicl::ParameterSet const &pset) 
     m_gridManager(pset.get<fhicl::ParameterSet>("GridManager")),
     m_trackVarManager(pset.get<fhicl::ParameterSet>("TrackVarManager")),
     m_showerVarManager(pset.get<fhicl::ParameterSet>("ShowerVarManager")),
-    m_ivysaurusGraph(pset.get<fhicl::ParameterSet>("IvysaurusGraph")),
+    m_ivysaurusEvaluator(pset.get<fhicl::ParameterSet>("IvysaurusEvaluator")),
     m_hitModuleLabel(pset.get<std::string>("HitModuleLabel")),
     m_recoModuleLabel(pset.get<std::string>("RecoModuleLabel")),
     m_completenessThreshold(pset.get<float>("CompletenessThreshold")),
@@ -307,14 +306,6 @@ void IvysaurusTrainingFiles::analyze(const art::Event &evt)
 
         int nInitialisedGrids(0);
 
-
-        ////////////////////////////////////////////                                                                                                                                                                                    
-        // just have this here for a bit...
-        ////////////////////////////////////////////  
-        m_ivysaurusGraph.IvysaurusUseEvaluate(evt, pfparticle);
-
-
-
         for (IvysaurusUtils::PandoraView pandoraView : {IvysaurusUtils::PandoraView::TPC_VIEW_U, IvysaurusUtils::PandoraView::TPC_VIEW_V, IvysaurusUtils::PandoraView::TPC_VIEW_W})
         {
             GridManager::Grid startGrid = m_gridManager.ObtainViewGrid(evt, pfparticle, pandoraView, true);
@@ -394,11 +385,18 @@ void IvysaurusTrainingFiles::analyze(const art::Event &evt)
             continue;
 
         ////////////////////////////////////////////                                                                                                                                                                                    
+        // Just leave this here a minute
+        ////////////////////////////////////////////  
+        m_ivysaurusEvaluator.IvysaurusUseEvaluate(evt, pfparticle);
+
+        ////////////////////////////////////////////                                                                                                                                                                                    
         // Now fill the track variables
         ////////////////////////////////////////////  
         TrackVarManager::TrackVars trackVars;
 
         m_trackVarsSuccessful.push_back(m_trackVarManager.EvaluateTrackVars(evt, pfparticle, trackVars) ? 1 : 0);
+        m_trackVarManager.NormaliseTrackVars(trackVars);
+
         m_nTrackChildren.push_back(trackVars.GetNTrackChildren());
         m_nShowerChildren.push_back(trackVars.GetNShowerChildren());
         m_nGrandChildren.push_back(trackVars.GetNGrandChildren());
@@ -419,6 +417,7 @@ void IvysaurusTrainingFiles::analyze(const art::Event &evt)
         m_trackStubLength.push_back(showerVars.GetTrackStubLength());
         m_nuVertexAvSeparation.push_back(showerVars.GetNuVertexAvSeparation());
         m_nuVertexChargeAsymmetry.push_back(showerVars.GetNuVertexChargeAsymmetry());
+        m_showerFoundConnectionPathway.push_back(showerVars.GetFoundConnectionPathway());
         m_showerInitialGapSize.push_back(showerVars.GetInitialGapSize());
         m_showerLargestGapSize.push_back(showerVars.GetLargestGapSize());
         m_showerPathwayLength.push_back(showerVars.GetPathwayLength());
@@ -497,6 +496,7 @@ void IvysaurusTrainingFiles::Reset()
   m_trackStubLength.clear();
   m_nuVertexAvSeparation.clear();
   m_nuVertexChargeAsymmetry.clear();
+  m_showerFoundConnectionPathway.clear();
   m_showerInitialGapSize.clear();
   m_showerLargestGapSize.clear();
   m_showerPathwayLength.clear();
@@ -574,6 +574,7 @@ void IvysaurusTrainingFiles::beginJob()
     m_tree->Branch("ShowerTrackStubLength", &m_trackStubLength);
     m_tree->Branch("ShowerNuVertexAvSeparation", &m_nuVertexAvSeparation);
     m_tree->Branch("ShowerNuVertexChargeAsymmetry", &m_nuVertexChargeAsymmetry);
+    m_tree->Branch("ShowerFoundConnectionPathway", &m_showerFoundConnectionPathway);
     m_tree->Branch("ShowerInitialGapSize", &m_showerInitialGapSize);
     m_tree->Branch("ShowerLargestGapSize", &m_showerLargestGapSize);
     m_tree->Branch("ShowerPathwayLength", &m_showerPathwayLength);
