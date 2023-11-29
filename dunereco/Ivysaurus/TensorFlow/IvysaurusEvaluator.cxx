@@ -1,5 +1,5 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////
-// Class:       IvysaurusGraph
+// Class:       IvysaurusEvaluator
 // Authors:     R.Sulej (Robert.Sulej@cern.ch), from DUNE, FNAL/NCBJ, Sept. 2017
 //              P.Plonski,                      from DUNE, WUT, Sept. 2017
 //              S.Alonso-Monsalve,              from DUNE, CERN, Aug. 2018
@@ -24,24 +24,20 @@
 #include "dunereco/Ivysaurus/Managers/TrackVarManager.h"
 #include "dunereco/Ivysaurus/Utils/IvysaurusUtils.h"
 
-#include "IvysaurusGraph.h"
+#include "IvysaurusEvaluator.h"
 
 /////////////////////////////////////////////////////////////
 
-ivysaurus::IvysaurusGraph::IvysaurusGraph(fhicl::ParameterSet const &pset) :
+ivysaurus::IvysaurusEvaluator::IvysaurusEvaluator(fhicl::ParameterSet const &pset) :
     m_networkDirectory(pset.get<std::string>("NetworkDirectory")), 
     m_gridManager(pset.get<fhicl::ParameterSet>("GridManager")),
     m_trackVarManager(pset.get<fhicl::ParameterSet>("TrackVarManager")),
     m_recoModuleLabel(pset.get<std::string>("RecoModuleLabel")),
     m_nTrackVars(pset.get<int>("NTrackVars"))
 {
-    std::cout << "Starting to build the graph" << std::endl;
-
     // Create dummy options.
     tensorflow::SessionOptions sessionOptions;
     tensorflow::RunOptions runOptions;
-
-    std::cout << "Session started... reading network architecture" << std::endl;
 
     // Load the model bundle. (this returns a status code)
     const auto loadResult = tensorflow::LoadSavedModel(sessionOptions, runOptions, m_networkDirectory, 
@@ -53,7 +49,7 @@ ivysaurus::IvysaurusGraph::IvysaurusGraph(fhicl::ParameterSet const &pset) :
 
 /////////////////////////////////////////////////////////////
 
-void ivysaurus::IvysaurusGraph::IvysaurusUseEvaluate(const art::Event &evt, const art::Ptr<recob::PFParticle> &pfparticle)
+void ivysaurus::IvysaurusEvaluator::IvysaurusUseEvaluate(const art::Event &evt, const art::Ptr<recob::PFParticle> &pfparticle)
 {
     // Obtain the input grid tensors
     std::cout << "Making the grid tensors..." << std::endl;
@@ -131,7 +127,7 @@ void ivysaurus::IvysaurusGraph::IvysaurusUseEvaluate(const art::Event &evt, cons
 
 /////////////////////////////////////////////////////////////
 
-tensorflow::Tensor ivysaurus::IvysaurusGraph::ObtainInputGridTensor(const art::Event &evt, const art::Ptr<recob::PFParticle> &pfparticle, 
+tensorflow::Tensor ivysaurus::IvysaurusEvaluator::ObtainInputGridTensor(const art::Event &evt, const art::Ptr<recob::PFParticle> &pfparticle, 
     const bool isStart, const IvysaurusUtils::PandoraView &pandoraView)
 {
     GridManager::Grid grid = m_gridManager.ObtainViewGrid(evt, pfparticle, pandoraView, isStart);
@@ -151,7 +147,7 @@ tensorflow::Tensor ivysaurus::IvysaurusGraph::ObtainInputGridTensor(const art::E
 
 /////////////////////////////////////////////////////////////
 
-tensorflow::Tensor ivysaurus::IvysaurusGraph::ObtainInputTrackTensor(const art::Event &evt, const art::Ptr<recob::PFParticle> &pfparticle)
+tensorflow::Tensor ivysaurus::IvysaurusEvaluator::ObtainInputTrackTensor(const art::Event &evt, const art::Ptr<recob::PFParticle> &pfparticle)
 {
     // Order should be: 
     // nTrackChildren, nShowerChildren, nGrandChildren, nChildHits, childEnergy, childTrackScore, trackLength, trackWobble, trackScore, momComparison  
@@ -180,7 +176,7 @@ tensorflow::Tensor ivysaurus::IvysaurusGraph::ObtainInputTrackTensor(const art::
 
 /////////////////////////////////////////////////////////////
 
-double ivysaurus::IvysaurusGraph::GetTrackShowerScore(const art::Event &evt, const art::Ptr<recob::PFParticle> &pfparticle)
+double ivysaurus::IvysaurusEvaluator::GetTrackShowerScore(const art::Event &evt, const art::Ptr<recob::PFParticle> &pfparticle)
 {
     const art::Ptr<larpandoraobj::PFParticleMetadata> &metadata = dune_ana::DUNEAnaPFParticleUtils::GetMetadata(pfparticle, evt, m_recoModuleLabel);
     const auto metaMap = metadata->GetPropertiesMap();

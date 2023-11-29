@@ -117,9 +117,9 @@ void TrackVarManager::FillHierarchyInfo(const art::Event &evt, const art::Ptr<re
     int nShowers = 0;
     int nGrandChildren = 0;
 
-    int highestHits = 0;
-    float highestHitEnergy = 0;
-    float highestHitTrackScore = 0; 
+    int highestHits = -1;
+    float highestHitEnergy = -1;
+    float highestHitTrackScore = -1; 
 
     // Look at children near endpoint? 
     for (const art::Ptr<recob::PFParticle> &childPFP : childPFPs)
@@ -145,7 +145,7 @@ void TrackVarManager::FillHierarchyInfo(const art::Event &evt, const art::Ptr<re
 
         const std::vector<art::Ptr<recob::Hit>> hits = dune_ana::DUNEAnaPFParticleUtils::GetHits(childPFP, evt, m_recoModuleLabel);
 
-        if (hits.size() > static_cast<unsigned int>(highestHits))
+        if (static_cast<int>(hits.size()) > highestHits)
         {
             highestHits = hits.size();
             highestHitEnergy = GetChildEnergy(evt, pfparticle);

@@ -3,7 +3,7 @@
 
 BEGIN_PROLOG
 
-ivysaurus_graph:
+ivysaurus_evaluator:
 {
   GridManager:            @local::grid_manager
   TrackVarManager:        @local::trackvar_manager
