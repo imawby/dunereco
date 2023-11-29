@@ -63,11 +63,9 @@ FDSelection::PandrizzleAlg::Record::Record(const InputVarsToReader &inputVarsToR
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 FDSelection::PandrizzleAlg::PandrizzleAlg(const fhicl::ParameterSet& pset) :
-    fPFParticleModuleLabel(pset.get<std::string>("ModuleLabels.PFParticleModuleLabel")),
-    fShowerModuleLabel(pset.get<std::string>("ModuleLabels.ShowerModuleLabel")),
-    fClusterModuleLabel(pset.get<std::string>("ModuleLabels.ClusterModuleLabel")),
-    fPIDModuleLabel(pset.get<std::string>("ModuleLabels.PIDModuleLabel")),
-    fPFPMetadataLabel(pset.get<std::string>("ModuleLabels.PFPMetadataLabel")),
+    fRecoModuleLabel(pset.get<std::string>("RecoModuleLabel")),
+    fShowerModuleLabel(pset.get<std::string>("ShowerModuleLabel")),
+    fPIDModuleLabel(pset.get<std::string>("PIDModuleLabel")),
     fPandrizzleWeightFileName(pset.get< std::string>("PandrizzleWeightFileName")),
     fEnhancedPandrizzleWeightFileName(pset.get< std::string>("EnhancedPandrizzleWeightFileName")),
     fReader("", 0),
@@ -276,15 +274,15 @@ void FDSelection::PandrizzleAlg::BookTreeBool(TTree *tree, std::string branch_na
 
 void FDSelection::PandrizzleAlg::Run(const art::Event& evt) 
 {
-  if (!dune_ana::DUNEAnaEventUtils::HasNeutrino(evt, fPFParticleModuleLabel))
+  if (!dune_ana::DUNEAnaEventUtils::HasNeutrino(evt, fRecoModuleLabel))
     return;
   
-  art::Ptr<recob::PFParticle> neutrinoPFP = dune_ana::DUNEAnaEventUtils::GetNeutrino(evt, fPFParticleModuleLabel);
-  std::vector<art::Ptr<recob::PFParticle>> childPFPs = dune_ana::DUNEAnaPFParticleUtils::GetChildParticles(neutrinoPFP, evt, fPFParticleModuleLabel);
+  art::Ptr<recob::PFParticle> neutrinoPFP = dune_ana::DUNEAnaEventUtils::GetNeutrino(evt, fRecoModuleLabel);
+  std::vector<art::Ptr<recob::PFParticle>> childPFPs = dune_ana::DUNEAnaPFParticleUtils::GetChildParticles(neutrinoPFP, evt, fRecoModuleLabel);
 
   for (art::Ptr<recob::PFParticle> childPFP : childPFPs)
   {
-    if (!dune_ana::DUNEAnaPFParticleUtils::IsShower(childPFP, evt, fPFParticleModuleLabel, fShowerModuleLabel))
+    if (!dune_ana::DUNEAnaPFParticleUtils::IsShower(childPFP, evt, fRecoModuleLabel, fShowerModuleLabel))
       continue;
 
     ProcessPFParticle(childPFP, evt);
@@ -307,16 +305,16 @@ void FDSelection::PandrizzleAlg::ProcessPFParticle(const art::Ptr<recob::PFParti
   //Fill the PFP hits
   fVarHolder.IntVars["PFPPDG"] = pfp->PdgCode();
 
-  std::vector<art::Ptr<recob::Hit>> pfp_hits = dune_ana::DUNEAnaPFParticleUtils::GetHits(pfp, evt, fClusterModuleLabel);
+  std::vector<art::Ptr<recob::Hit>> pfp_hits = dune_ana::DUNEAnaPFParticleUtils::GetHits(pfp, evt, fRecoModuleLabel);
   fVarHolder.IntVars["PFPNHits"] = pfp_hits.size();
 
   FillTruthInfo(pfp, evt);
 
   // Fill the MVA Info
-  if (!dune_ana::DUNEAnaPFParticleUtils::IsShower(pfp, evt, fPFParticleModuleLabel, fShowerModuleLabel))
+  if (!dune_ana::DUNEAnaPFParticleUtils::IsShower(pfp, evt, fRecoModuleLabel, fShowerModuleLabel))
     return;
     
-  art::Ptr<recob::Shower> pShower = dune_ana::DUNEAnaPFParticleUtils::GetShower(pfp, evt, fPFParticleModuleLabel, fShowerModuleLabel);
+  art::Ptr<recob::Shower> pShower = dune_ana::DUNEAnaPFParticleUtils::GetShower(pfp, evt, fRecoModuleLabel, fShowerModuleLabel);
 
   FillMVAInfo(pShower, evt);
   FillPandrizzleInfo(pShower, evt);
@@ -328,7 +326,7 @@ void FDSelection::PandrizzleAlg::ProcessPFParticle(const art::Ptr<recob::PFParti
 
 void FDSelection::PandrizzleAlg::FillTruthInfo(const art::Ptr<recob::PFParticle> pfp, const art::Event& evt)
 {
-  std::vector<art::Ptr<recob::Hit> > pfp_hits = dune_ana::DUNEAnaPFParticleUtils::GetHits(pfp, evt, fClusterModuleLabel);
+  std::vector<art::Ptr<recob::Hit> > pfp_hits = dune_ana::DUNEAnaPFParticleUtils::GetHits(pfp, evt, fRecoModuleLabel);
 
   simb::MCParticle* matchedMCParticle = nullptr;
 
@@ -367,16 +365,16 @@ void FDSelection::PandrizzleAlg::FillMVAInfo(const art::Ptr<recob::Shower> pShow
 void FDSelection::PandrizzleAlg::FillPandrizzleInfo(const art::Ptr<recob::Shower> pShower, const art::Event& evt)
 {
   // Displacement
-  if (!dune_ana::DUNEAnaEventUtils::HasNeutrino(evt, fPFParticleModuleLabel))
+  if (!dune_ana::DUNEAnaEventUtils::HasNeutrino(evt, fRecoModuleLabel))
     return;
   
-  art::Ptr<recob::PFParticle> nu_pfp = dune_ana::DUNEAnaEventUtils::GetNeutrino(evt, fPFParticleModuleLabel);
+  art::Ptr<recob::PFParticle> nu_pfp = dune_ana::DUNEAnaEventUtils::GetNeutrino(evt, fRecoModuleLabel);
 
   TVector3 nuVertex = TVector3(0.f, 0.f, 0.f);
 
   try
   {
-    art::Ptr<recob::Vertex> pNuVertex = dune_ana::DUNEAnaPFParticleUtils::GetVertex(nu_pfp, evt, fPFParticleModuleLabel);
+    art::Ptr<recob::Vertex> pNuVertex = dune_ana::DUNEAnaPFParticleUtils::GetVertex(nu_pfp, evt, fRecoModuleLabel);
     nuVertex = TVector3(pNuVertex->position().X(), pNuVertex->position().Y(), pNuVertex->position().Z());
   }
   catch(...)
@@ -392,7 +390,7 @@ void FDSelection::PandrizzleAlg::FillPandrizzleInfo(const art::Ptr<recob::Shower
   if (pShower->dEdx().size() > 0)
     fVarHolder.FloatVars["dEdxBestPlane"] = std::max(std::min(static_cast<Float_t>(pShower->dEdx().at(pShower->best_plane())), 20.f), -2.f);
 
-  //Distance of closest approach
+  // Distance of closest approach
   double alpha((pShower->ShowerStart() - nuVertex).Dot(pShower->Direction()));
   TVector3 r(pShower->ShowerStart() + alpha*pShower->Direction());
 
@@ -420,13 +418,13 @@ void FDSelection::PandrizzleAlg::FillPandrizzleInfo(const art::Ptr<recob::Shower
 void FDSelection::PandrizzleAlg::FillEnhancedPandrizzleInfo(const art::Ptr<recob::PFParticle> pfp, const art::Event& evt)
 {
   art::Handle< std::vector<recob::PFParticle> > pfparticleListHandle;
-  if (!(evt.getByLabel(fPFParticleModuleLabel, pfparticleListHandle)))
+  if (!(evt.getByLabel(fRecoModuleLabel, pfparticleListHandle)))
   {
-    mf::LogWarning("PandrizzleAlg") << "Unable to find std::vector<recob::PFParticle> with module label: " << fPFParticleModuleLabel;
+    mf::LogWarning("PandrizzleAlg") << "Unable to find std::vector<recob::PFParticle> with module label: " << fRecoModuleLabel;
     return;
   }
 
-  art::FindManyP<larpandoraobj::PFParticleMetadata> metadataAssn(pfparticleListHandle, evt, fPFPMetadataLabel);
+  art::FindManyP<larpandoraobj::PFParticleMetadata> metadataAssn(pfparticleListHandle, evt, fRecoModuleLabel);
   std::vector<art::Ptr<larpandoraobj::PFParticleMetadata>> pfpMetadata = metadataAssn.at(pfp.key());
 
   if ((pfpMetadata.size() == 1) && (pfpMetadata[0]->GetPropertiesMap().find("PathwayLengthMin") != pfpMetadata[0]->GetPropertiesMap().end()))
@@ -522,13 +520,13 @@ void FDSelection::PandrizzleAlg::FillBackupPandrizzleInfo(const art::Ptr<recob::
     fVarHolder.FloatVars["ModularShowerPathwayLengthMin"] = std::min(modularShowerPathwayLengthMin, 30.f);
     fVarHolder.FloatVars["ModularShowerPathwayKink3D"] = std::min(modularShowerPathwayKink3D, 20.f);
 
-    art::Ptr<recob::PFParticle> nu_pfp = dune_ana::DUNEAnaEventUtils::GetNeutrino(evt, fPFParticleModuleLabel);
+    art::Ptr<recob::PFParticle> nu_pfp = dune_ana::DUNEAnaEventUtils::GetNeutrino(evt, fRecoModuleLabel);
 
     TVector3 nuVertex = TVector3(0.f, 0.f, 0.f);
 
     try
     {
-        art::Ptr<recob::Vertex> pNuVertex = dune_ana::DUNEAnaPFParticleUtils::GetVertex(nu_pfp, evt, fPFParticleModuleLabel);
+        art::Ptr<recob::Vertex> pNuVertex = dune_ana::DUNEAnaPFParticleUtils::GetVertex(nu_pfp, evt, fRecoModuleLabel);
         nuVertex = TVector3(pNuVertex->position().X(), pNuVertex->position().Y(), pNuVertex->position().Z());
     }
     catch(...)
@@ -1260,7 +1258,7 @@ FDSelection::PandrizzleAlg::Record FDSelection::PandrizzleAlg::RunPID(const art:
     return ReturnEmptyRecord();
   }
 
-  std::vector<art::Ptr<recob::Hit>> allShowerHits(dune_ana::DUNEAnaPFParticleUtils::GetHits(pfp, evt, fClusterModuleLabel));
+  std::vector<art::Ptr<recob::Hit>> allShowerHits(dune_ana::DUNEAnaPFParticleUtils::GetHits(pfp, evt, fRecoModuleLabel));
   const int nShowerHits = allShowerHits.size();
 
   // Fill enhanced Pandrizzle scores...
