@@ -46,6 +46,7 @@ MODULE_LIBRARIES FDSelection
 	  	           art_Persistency_Provenance canvas
 	  	           art_Utilities canvas
                    dunereco_TrackPID_algorithms
+    dunereco_Ivysaurus_TensorFlow
         )
 
     endif ()

@@ -25,29 +25,30 @@
 
 #include "dunereco/Ivysaurus/Managers/GridManager.h"
 #include "dunereco/Ivysaurus/Managers/TrackVarManager.h"
+#include "dunereco/Ivysaurus/Managers/ShowerVarManager.h"
 
 namespace ivysaurus
 {
 
 class IvysaurusEvaluator
 {
-  struct IvysaurusScores
-  {
-      float m_muonScore;
-      float m_protonScore;
-      float m_pionScore;
-      float m_electronScore;
-      float m_photonScore;
-      float m_otherScore;
-      int m_particleType;
-
-      IvysaurusScores() : m_muonScore(-1.f), m_protonScore(-1.f), m_pionScore(-1.f), m_electronScore(-1.f), m_photonScore(-1.f), m_otherScore(-1.f), m_particleType(-1) {};
-  };
-
 public:
+    struct IvysaurusScores
+    {
+        float m_muonScore;
+        float m_protonScore;
+        float m_pionScore;
+        float m_electronScore;
+        float m_photonScore;
+        float m_otherScore;
+        int m_particleType;
+
+        IvysaurusScores() : m_muonScore(-1.f), m_protonScore(-1.f), m_pionScore(-1.f), m_electronScore(-1.f), m_photonScore(-1.f), m_otherScore(-1.f), m_particleType(-1) {};
+    };
+
     IvysaurusEvaluator(fhicl::ParameterSet const &pset);
 
-    void IvysaurusUseEvaluate(const art::Event &evt, const art::Ptr<recob::PFParticle> &pfparticle);
+    IvysaurusScores IvysaurusUseEvaluate(const art::Event &evt, const art::Ptr<recob::PFParticle> &pfparticle);
 
 private:
     tensorflow::Tensor ObtainInputGridTensor(const art::Event &evt, const art::Ptr<recob::PFParticle> &pfparticle, 
@@ -55,14 +56,18 @@ private:
 
     tensorflow::Tensor ObtainInputTrackTensor(const art::Event &evt, const art::Ptr<recob::PFParticle> &pfparticle);
 
+    tensorflow::Tensor ObtainInputShowerTensor(const art::Event &evt, const art::Ptr<recob::PFParticle> &pfparticle);
+
     double GetTrackShowerScore(const art::Event &evt, const art::Ptr<recob::PFParticle> &pfparticle);
 
     std::string m_networkDirectory;
     GridManager m_gridManager;
     TrackVarManager m_trackVarManager;
+    ShowerVarManager m_showerVarManager;
     tensorflow::SavedModelBundleLite m_savedModelBundle;
     std::string m_recoModuleLabel;
     int m_nTrackVars;
+    int m_nShowerVars;
 
 };
 

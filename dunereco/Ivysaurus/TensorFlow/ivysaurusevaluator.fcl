@@ -1,5 +1,6 @@
 #include "gridmanager.fcl"
 #include "trackvarmanager.fcl"
+#include "showervarmanager.fcl"
 
 BEGIN_PROLOG
 
@@ -7,8 +8,10 @@ ivysaurus_evaluator:
 {
   GridManager:            @local::grid_manager
   TrackVarManager:        @local::trackvar_manager
-  NetworkDirectory:       "/dune/app/users/imawby/larsoft_v09_79_00d02/srcs/dunereco/dunereco/Ivysaurus/TensorFlow/my_model/"
+  ShowerVarManager:       @local::showervar_manager
+  NetworkDirectory:       "my_model_VGG_BN/"
   NTrackVars:              10
+  NShowerVars:             3
   RecoModuleLabel:        "pandora"
 }
 

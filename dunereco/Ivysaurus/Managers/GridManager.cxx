@@ -38,8 +38,10 @@ namespace ivysaurus
 {
 
 GridManager::Grid::Grid(const TVector3 origin, const float driftSpan, const float wireSpan, 
-    const unsigned int dimensions, const IvysaurusUtils::PandoraView pandoraView, const bool isInitialised) : 
+    const unsigned int dimensions, const float maxGridEntry, const IvysaurusUtils::PandoraView pandoraView, 
+    const bool isInitialised) : 
         m_axisDimensions(dimensions),
+        m_maxGridEntry(maxGridEntry),
         m_pandoraView(pandoraView),
         m_isInitialised(isInitialised)
 {
@@ -56,6 +58,7 @@ GridManager::Grid::Grid(const TVector3 origin, const float driftSpan, const floa
     for (unsigned int i = 0; i <= m_axisDimensions; ++i)
         m_wireBoundaries.push_back(origin.Z() + (i * wireInterval));
 
+    m_isAveraged = false;
     m_isNormalised = false;
 }
 
@@ -110,10 +113,10 @@ void GridManager::Grid::AddToGrid(const TVector3 &position, const float energy, 
 
 /////////////////////////////////////////////////////////////
 
-void GridManager::Grid::NormaliseGrid()
+void GridManager::Grid::AverageGrid()
 {
-    if (m_isNormalised)
-        throw cet::exception("ivysaur::GridManager") << "this grid is already normalised!";
+    if (m_isAveraged)
+        throw cet::exception("ivysaur::GridManager") << "the entries are already averaged!";
 
     for (unsigned int driftIndex = 0; driftIndex < m_axisDimensions; ++driftIndex)
     {
@@ -126,8 +129,34 @@ void GridManager::Grid::NormaliseGrid()
         }
     }
 
+    m_isAveraged = true;
+}
+
+/////////////////////////////////////////////////////////////
+
+void GridManager::Grid::NormaliseGrid()
+{
+    if (m_isNormalised)
+        throw cet::exception("ivysaur::GridManager") << "the entries are already normalised!";
+
+    for (unsigned int driftIndex = 0; driftIndex < m_axisDimensions; ++driftIndex)
+    {
+        for (unsigned int wireIndex = 0; wireIndex < m_axisDimensions; ++wireIndex)
+        {
+            float gridEntry = m_gridValues[driftIndex][wireIndex];
+
+            if (gridEntry > m_maxGridEntry)
+                gridEntry = m_maxGridEntry;
+
+            gridEntry /= m_maxGridEntry;
+
+            m_gridValues[driftIndex][wireIndex] = gridEntry;
+        }
+    }
+
     m_isNormalised = true;
 }
+
 
 /////////////////////////////////////////////////////////////
 /////////////////////////////////////////////////////////////
@@ -139,6 +168,7 @@ GridManager::GridManager(const fhicl::ParameterSet& pset) :
     m_showerModuleLabel(pset.get<std::string>("ShowerModuleLabel")),
     m_gridSize3D(pset.get<float>("GridSize3D")),
     m_dimensions(pset.get<float>("GridDimensions")),
+    m_maxGridEntry(pset.get<float>("MaxGridEntry")),
     m_recombFactor(pset.get<float>("RecombFactor")),
     m_calorimetryAlg(pset.get<fhicl::ParameterSet>("CalorimetryAlg"))
 {
@@ -159,7 +189,7 @@ GridManager::Grid GridManager::ObtainViewGrid(const art::Event &evt, const art::
     const auto metaMap = metadata->GetPropertiesMap();
 
     if (metaMap.find("TrackScore") == metaMap.end())
-        return Grid(TVector3(0.f, 0.f, 0.f), 0.f, 0.f, 0, pandoraView, false);
+        return Grid(TVector3(0.f, 0.f, 0.f), 0.f, 0.f, 0, m_maxGridEntry, pandoraView, false);
 
     const float trackScore = metaMap.at("TrackScore");
 
@@ -175,7 +205,7 @@ GridManager::Grid GridManager::ObtainViewGrid(const art::Event &evt, const art::
             {
                 if (!GetStartExtremalPointsShower(evt, pfparticle, position1, position2))
                 {
-                    return Grid(TVector3(0.f, 0.f, 0.f), 0.f, 0.f, 0, pandoraView, false);
+                    return Grid(TVector3(0.f, 0.f, 0.f), 0.f, 0.f, 0, m_maxGridEntry, pandoraView, false);
                 }
             }
         }
@@ -185,7 +215,7 @@ GridManager::Grid GridManager::ObtainViewGrid(const art::Event &evt, const art::
             {
                 if (!GetStartExtremalPointsTrack(evt, pfparticle, position1, position2))
                 {
-                    return Grid(TVector3(0.f, 0.f, 0.f), 0.f, 0.f, 0, pandoraView, false);
+                    return Grid(TVector3(0.f, 0.f, 0.f), 0.f, 0.f, 0, m_maxGridEntry, pandoraView, false);
                 }
             }
         }
@@ -198,7 +228,7 @@ GridManager::Grid GridManager::ObtainViewGrid(const art::Event &evt, const art::
             {
                 if (!GetEndExtremalPointsShower(evt, pfparticle, position1, position2))
                 {
-                    return Grid(TVector3(0.f, 0.f, 0.f), 0.f, 0.f, 0, pandoraView, false);
+                    return Grid(TVector3(0.f, 0.f, 0.f), 0.f, 0.f, 0, m_maxGridEntry, pandoraView, false);
                 }
             }
         }
@@ -208,7 +238,7 @@ GridManager::Grid GridManager::ObtainViewGrid(const art::Event &evt, const art::
             {
                 if (!GetEndExtremalPointsTrack(evt, pfparticle, position1, position2))
                 {
-                    return Grid(TVector3(0.f, 0.f, 0.f), 0.f, 0.f, 0, pandoraView, false);
+                    return Grid(TVector3(0.f, 0.f, 0.f), 0.f, 0.f, 0, m_maxGridEntry, pandoraView, false);
                 }
             }
         }
@@ -220,7 +250,7 @@ GridManager::Grid GridManager::ObtainViewGrid(const art::Event &evt, const art::
     const float driftSpan = projectedPosition2.X() - projectedPosition1.X();
     const float wireSpan = projectedPosition2.Z() - projectedPosition1.Z();
 
-    return Grid(projectedPosition1, driftSpan, wireSpan, m_dimensions, pandoraView, true);
+    return Grid(projectedPosition1, driftSpan, wireSpan, m_dimensions, m_maxGridEntry, pandoraView, true);
 }
 
 /////////////////////////////////////////////////////////////
@@ -339,6 +369,7 @@ void GridManager::FillViewGrid(const art::Event &evt, const art::Ptr<recob::PFPa
         grid.AddToGrid(pandoraHitPosition, energy, weight);
     }
 
+    grid.AverageGrid();
     grid.NormaliseGrid();
 }
 
