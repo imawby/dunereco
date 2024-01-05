@@ -32,6 +32,7 @@ class ShowerVarManager
     public:
       ShowerVars();
 
+      bool GetIsNormalised() const;
       float GetDisplacement() const;
       float GetDCA() const;
       float GetTrackStubLength() const;
@@ -53,6 +54,7 @@ class ShowerVarManager
       float GetNAmbiguousViews() const;
       float GetUnaccountedEnergy() const;
       ////
+      void SetIsNormalised(const bool isNormalised);
       void SetDisplacement(const float displacement);
       void SetDCA(const float dca);
       void SetTrackStubLength(const float trackStubLength);
@@ -75,6 +77,7 @@ class ShowerVarManager
       void SetUnaccountedEnergy(const float unaccountedEnergy);
 
     private:
+      bool m_isNormalised;
       float m_displacement;
       float m_DCA;
       float m_trackStubLength;
@@ -101,6 +104,7 @@ class ShowerVarManager
     ~ShowerVarManager();
 
     bool EvaluateShowerVars(const art::Event &evt, const art::Ptr<recob::PFParticle> &pfparticle, ShowerVarManager::ShowerVars &showerVars) const;
+    void NormaliseShowerVars(ShowerVars &showerVars) const;
     void Reset(ShowerVarManager::ShowerVars &showerVars) const;
 
   private:
@@ -119,7 +123,33 @@ class ShowerVarManager
     std::string m_recoModuleLabel;
     std::string m_showerModuleLabel;
     std::string m_hitModuleLabel;
+    float m_displacementLimit;
+    float m_DCALimit;
+    float m_trackStubLengthLimit;
+    float m_nuVertexAvSeparationLimit;
+    float m_nuVertexChargeAsymmetryLimit;
+    float m_initialGapSizeLimit;
+    float m_largestGapSizeLimit;
+    float m_pathwayLengthLimit;
+    float m_pathwayScatteringAngle2DLimit;
+    float m_nShowerHitsLimit;
+    float m_foundHitRatioLimit;
+    float m_scatterAngleLimit;
+    float m_openingAngleLimit;
+    float m_nuVertexEnergyAsymmetryLimit;
+    float m_nuVertexEnergyWeightedMeanRadialDistanceLimit;
+    float m_showerStartEnergyAsymmetryLimit;
+    float m_showerStartMoliereRadiusLimit;
+    float m_nAmbiguousViewsLimit;
+    float m_unaccountedEnergyLimit;
 };
+
+/////////////////////////////////////////////////////////////
+
+inline bool ShowerVarManager::ShowerVars::GetIsNormalised() const
+{
+    return m_isNormalised;
+}
 
 /////////////////////////////////////////////////////////////
 
@@ -274,6 +304,15 @@ inline void ShowerVarManager::ShowerVars::SetDCA(const float dca)
 {
     m_DCA = dca;
 }
+
+
+/////////////////////////////////////////////////////////////
+
+inline void ShowerVarManager::ShowerVars::SetIsNormalised(const bool isNormalised)
+{
+    m_isNormalised = isNormalised;
+}
+
 
 /////////////////////////////////////////////////////////////
 

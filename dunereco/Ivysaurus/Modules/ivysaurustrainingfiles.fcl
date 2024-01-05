@@ -12,7 +12,7 @@ ivysaurus_training_files:
   GridManager:            @local::grid_manager
   TrackVarManager:        @local::trackvar_manager
   ShowerVarManager:       @local::showervar_manager
-  IvysaurusGraph:         @local::ivysaurus_evaluator
+  IvysaurusEvaluator:     @local::ivysaurus_evaluator
   HitModuleLabel:         'hitfd'
   RecoModuleLabel:        'pandora'
   CompletenessThreshold:   0.5

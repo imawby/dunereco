@@ -37,6 +37,7 @@ namespace ivysaurus
 {
 
 ShowerVarManager::ShowerVars::ShowerVars() : 
+    m_isNormalised(false),
     m_displacement(-1.f),
     m_DCA(-1.f),
     m_trackStubLength(-1.f),
@@ -66,7 +67,26 @@ ShowerVarManager::ShowerVars::ShowerVars() :
 ShowerVarManager::ShowerVarManager(const fhicl::ParameterSet& pset) :
     m_recoModuleLabel(pset.get<std::string>("RecoModuleLabel")),
     m_showerModuleLabel(pset.get<std::string>("ShowerModuleLabel")),
-    m_hitModuleLabel(pset.get<std::string>("HitModuleLabel"))
+    m_hitModuleLabel(pset.get<std::string>("HitModuleLabel")),
+    m_displacementLimit(pset.get<float>("DisplacementLimit")),
+    m_DCALimit(pset.get<float>("DCALimit")),
+    m_trackStubLengthLimit(pset.get<float>("TrackStubLengthLimit")),
+    m_nuVertexAvSeparationLimit(pset.get<float>("NuVertexAvSeparationLimit")),
+    m_nuVertexChargeAsymmetryLimit(pset.get<float>("NuVertexChargeAsymmetryLimit")),
+    m_initialGapSizeLimit(pset.get<float>("InitialGapSizeLimit")),
+    m_largestGapSizeLimit(pset.get<float>("LargestGapSizeLimit")),
+    m_pathwayLengthLimit(pset.get<float>("PathwayLengthLimit")),
+    m_pathwayScatteringAngle2DLimit(pset.get<float>("PathwayScatteringAngle2DLimit")),
+    m_nShowerHitsLimit(pset.get<float>("NShowerHitsLimit")),
+    m_foundHitRatioLimit(pset.get<float>("FoundHitRatioLimit")),
+    m_scatterAngleLimit(pset.get<float>("ScatterAngleLimit")),
+    m_openingAngleLimit(pset.get<float>("OpeningAngleLimit")),
+    m_nuVertexEnergyAsymmetryLimit(pset.get<float>("NuVertexEnergyAsymmetryLimit")),
+    m_nuVertexEnergyWeightedMeanRadialDistanceLimit(pset.get<float>("NuVertexEnergyWeightedMeanRadialDistanceLimit")),
+    m_showerStartEnergyAsymmetryLimit(pset.get<float>("ShowerStartEnergyAsymmetryLimit")),
+    m_showerStartMoliereRadiusLimit(pset.get<float>("ShowerStartMoliereRadiusLimit")),
+    m_nAmbiguousViewsLimit(pset.get<float>("NAmbiguousViewsLimit")),
+    m_unaccountedEnergyLimit(pset.get<float>("UnaccountedEnergyLimit"))
 {
 }
 
@@ -295,6 +315,7 @@ float ShowerVarManager::GetViewNuVertexChargeAsymmetry(const art::Event &evt, co
 
 void ShowerVarManager::Reset(ShowerVarManager::ShowerVars &showerVars) const
 {
+    showerVars.SetIsNormalised(false);
     showerVars.SetDisplacement(-1.f);
     showerVars.SetDCA(-1.f);
     showerVars.SetTrackStubLength(-1.f);
@@ -318,4 +339,184 @@ void ShowerVarManager::Reset(ShowerVarManager::ShowerVars &showerVars) const
 
 /////////////////////////////////////////////////////////////
 
+void ShowerVarManager::NormaliseShowerVars(ShowerVarManager::ShowerVars &showerVars) const
+{
+    if (showerVars.GetIsNormalised())
+        return;
+
+    // Displacement
+    if (showerVars.GetDisplacement() > m_displacementLimit)
+        showerVars.SetDisplacement(m_displacementLimit);
+
+    if (showerVars.GetDisplacement() < ((-1.0) * std::numeric_limits<float>::epsilon()))
+        showerVars.SetDisplacement((-1.0) * m_displacementLimit);
+
+    showerVars.SetDisplacement(showerVars.GetDisplacement() / m_displacementLimit);
+
+    // DCA
+    if (showerVars.GetDCA() > m_DCALimit)
+        showerVars.SetDCA(m_DCALimit);
+
+    if (showerVars.GetDCA() < ((-1.0) * std::numeric_limits<float>::epsilon()))
+        showerVars.SetDCA((-1.0) * m_DCALimit);
+
+    showerVars.SetDCA(showerVars.GetDCA() / m_DCALimit);
+
+    // TrackStubLength
+    if (showerVars.GetTrackStubLength() > m_trackStubLengthLimit)
+        showerVars.SetTrackStubLength(m_trackStubLengthLimit);
+
+    if (showerVars.GetTrackStubLength() < ((-1.0) * std::numeric_limits<float>::epsilon()))
+        showerVars.SetTrackStubLength((-1.0) * m_trackStubLengthLimit);
+
+    showerVars.SetTrackStubLength(showerVars.GetTrackStubLength() / m_trackStubLengthLimit);
+
+    // NuVertexAvSep
+    if (showerVars.GetNuVertexAvSeparation() > m_nuVertexAvSeparationLimit)
+        showerVars.SetNuVertexAvSeparation(m_nuVertexAvSeparationLimit);
+
+    if (showerVars.GetNuVertexAvSeparation() < ((-1.0) * std::numeric_limits<float>::epsilon()))
+        showerVars.SetNuVertexAvSeparation((-1.0) * m_nuVertexAvSeparationLimit);
+
+    showerVars.SetNuVertexAvSeparation(showerVars.GetNuVertexAvSeparation() / m_nuVertexAvSeparationLimit);
+
+    // NuVertexChargeAsymmetry
+    if (showerVars.GetNuVertexChargeAsymmetry() > m_nuVertexChargeAsymmetryLimit)
+        showerVars.SetNuVertexChargeAsymmetry(m_nuVertexChargeAsymmetryLimit);
+
+    if (showerVars.GetNuVertexChargeAsymmetry() < ((-1.0) * std::numeric_limits<float>::epsilon()))
+        showerVars.SetNuVertexChargeAsymmetry((-1.0) * m_nuVertexChargeAsymmetryLimit);
+
+    showerVars.SetNuVertexChargeAsymmetry(showerVars.GetNuVertexChargeAsymmetry() / m_nuVertexChargeAsymmetryLimit);
+
+    // InitialGapSize
+    if (showerVars.GetInitialGapSize() > m_initialGapSizeLimit)
+        showerVars.SetInitialGapSize(m_initialGapSizeLimit);
+
+    if (showerVars.GetInitialGapSize() < ((-1.0) * std::numeric_limits<float>::epsilon()))
+        showerVars.SetInitialGapSize((-1.0) * m_initialGapSizeLimit);
+
+    showerVars.SetInitialGapSize(showerVars.GetInitialGapSize() / m_initialGapSizeLimit);
+
+    // LargestGapSize
+    if (showerVars.GetLargestGapSize() > m_largestGapSizeLimit)
+        showerVars.SetLargestGapSize(m_largestGapSizeLimit);
+
+    if (showerVars.GetLargestGapSize() < ((-1.0) * std::numeric_limits<float>::epsilon()))
+        showerVars.SetLargestGapSize((-1.0) * m_largestGapSizeLimit);
+
+    showerVars.SetLargestGapSize(showerVars.GetLargestGapSize() / m_largestGapSizeLimit);
+
+    // PathwayLength
+    if (showerVars.GetPathwayLength() > m_pathwayLengthLimit)
+        showerVars.SetPathwayLength(m_pathwayLengthLimit);
+
+    if (showerVars.GetPathwayLength() < ((-1.0) * std::numeric_limits<float>::epsilon()))
+        showerVars.SetPathwayLength((-1.0) * m_pathwayLengthLimit);
+
+    showerVars.SetPathwayLength(showerVars.GetPathwayLength() / m_pathwayLengthLimit);
+
+    // PathwayScatteringAngle2D
+    if (showerVars.GetPathwayScatteringAngle2D() > m_pathwayScatteringAngle2DLimit)
+        showerVars.SetPathwayScatteringAngle2D(m_pathwayScatteringAngle2DLimit);
+
+    if (showerVars.GetPathwayScatteringAngle2D() < ((-1.0) * std::numeric_limits<float>::epsilon()))
+        showerVars.SetPathwayScatteringAngle2D((-1.0) * m_pathwayScatteringAngle2DLimit);
+
+    showerVars.SetPathwayScatteringAngle2D(showerVars.GetPathwayScatteringAngle2D() / m_pathwayScatteringAngle2DLimit);
+
+    // NShowerHits
+    if (showerVars.GetNShowerHits() > m_nShowerHitsLimit)
+        showerVars.SetNShowerHits(m_nShowerHitsLimit);
+
+    if (showerVars.GetNShowerHits() < ((-1.0) * std::numeric_limits<float>::epsilon()))
+        showerVars.SetNShowerHits((-1.0) * m_nShowerHitsLimit);
+
+    showerVars.SetNShowerHits(showerVars.GetNShowerHits() / m_nShowerHitsLimit);
+
+    // FoundHitRatio
+    if (showerVars.GetFoundHitRatio() > m_foundHitRatioLimit)
+        showerVars.SetFoundHitRatio(m_foundHitRatioLimit);
+
+    if (showerVars.GetFoundHitRatio() < ((-1.0) * std::numeric_limits<float>::epsilon()))
+        showerVars.SetFoundHitRatio((-1.0) * m_foundHitRatioLimit);
+
+    showerVars.SetFoundHitRatio(showerVars.GetFoundHitRatio() / m_foundHitRatioLimit);
+
+    // ScatterAngle
+    if (showerVars.GetScatterAngle() > m_scatterAngleLimit)
+        showerVars.SetScatterAngle(m_scatterAngleLimit);
+
+    if (showerVars.GetScatterAngle() < ((-1.0) * std::numeric_limits<float>::epsilon()))
+        showerVars.SetScatterAngle((-1.0) * m_scatterAngleLimit);
+
+    showerVars.SetScatterAngle(showerVars.GetScatterAngle() / m_scatterAngleLimit);
+
+    // OpeningAngle
+    if (showerVars.GetOpeningAngle() > m_openingAngleLimit)
+        showerVars.SetOpeningAngle(m_openingAngleLimit);
+
+    if (showerVars.GetOpeningAngle() < ((-1.0) * std::numeric_limits<float>::epsilon()))
+        showerVars.SetOpeningAngle((-1.0) * m_openingAngleLimit);
+
+    showerVars.SetOpeningAngle(showerVars.GetOpeningAngle() / m_openingAngleLimit);
+
+    // NuVertexEnergyAsymmetry
+    if (showerVars.GetNuVertexEnergyAsymmetry() > m_nuVertexEnergyAsymmetryLimit)
+        showerVars.SetNuVertexEnergyAsymmetry(m_nuVertexEnergyAsymmetryLimit);
+
+    if (showerVars.GetNuVertexEnergyAsymmetry() < ((-1.0) * std::numeric_limits<float>::epsilon()))
+        showerVars.SetNuVertexEnergyAsymmetry((-1.0) * m_nuVertexEnergyAsymmetryLimit);
+
+    showerVars.SetNuVertexEnergyAsymmetry(showerVars.GetNuVertexEnergyAsymmetry() / m_nuVertexEnergyAsymmetryLimit);
+
+    // NuVertexEnergyWeightedMeanRadialDistance
+    if (showerVars.GetNuVertexEnergyWeightedMeanRadialDistance() > m_nuVertexEnergyWeightedMeanRadialDistanceLimit)
+        showerVars.SetNuVertexEnergyWeightedMeanRadialDistance(m_nuVertexEnergyWeightedMeanRadialDistanceLimit);
+
+    if (showerVars.GetNuVertexEnergyWeightedMeanRadialDistance() < ((-1.0) * std::numeric_limits<float>::epsilon()))
+        showerVars.SetNuVertexEnergyWeightedMeanRadialDistance((-1.0) * m_nuVertexEnergyWeightedMeanRadialDistanceLimit);
+
+    showerVars.SetNuVertexEnergyWeightedMeanRadialDistance(showerVars.GetNuVertexEnergyWeightedMeanRadialDistance() / m_nuVertexEnergyWeightedMeanRadialDistanceLimit);
+
+    // ShowerStartEnergyAsymmetry
+    if (showerVars.GetShowerStartEnergyAsymmetry() > m_showerStartEnergyAsymmetryLimit)
+        showerVars.SetShowerStartEnergyAsymmetry(m_showerStartEnergyAsymmetryLimit);
+
+    if (showerVars.GetShowerStartEnergyAsymmetry() < ((-1.0) * std::numeric_limits<float>::epsilon()))
+        showerVars.SetShowerStartEnergyAsymmetry((-1.0) * m_showerStartEnergyAsymmetryLimit);
+
+    showerVars.SetShowerStartEnergyAsymmetry(showerVars.GetShowerStartEnergyAsymmetry() / m_showerStartEnergyAsymmetryLimit);
+
+    // ShowerStartMoliereRadius
+    if (showerVars.GetShowerStartMoliereRadius() > m_showerStartMoliereRadiusLimit)
+        showerVars.SetShowerStartMoliereRadius(m_showerStartMoliereRadiusLimit);
+
+    if (showerVars.GetShowerStartMoliereRadius() < ((-1.0) * std::numeric_limits<float>::epsilon()))
+        showerVars.SetShowerStartMoliereRadius((-1.0) * m_showerStartMoliereRadiusLimit);
+
+    showerVars.SetShowerStartMoliereRadius(showerVars.GetShowerStartMoliereRadius() / m_showerStartMoliereRadiusLimit);
+
+    // NAmbiguousViews
+    if (showerVars.GetNAmbiguousViews() > m_nAmbiguousViewsLimit)
+        showerVars.SetNAmbiguousViews(m_nAmbiguousViewsLimit);
+
+    if (showerVars.GetNAmbiguousViews() < ((-1.0) * std::numeric_limits<float>::epsilon()))
+        showerVars.SetNAmbiguousViews((-1.0) * m_nAmbiguousViewsLimit);
+
+    showerVars.SetNAmbiguousViews(showerVars.GetNAmbiguousViews() / m_nAmbiguousViewsLimit);
+
+    // UnaccountedEnergy
+    if (showerVars.GetUnaccountedEnergy() > m_unaccountedEnergyLimit)
+        showerVars.SetUnaccountedEnergy(m_unaccountedEnergyLimit);
+
+    if (showerVars.GetUnaccountedEnergy() < ((-1.0) * m_unaccountedEnergyLimit))
+        showerVars.SetUnaccountedEnergy((-1.0) * m_unaccountedEnergyLimit);
+
+    showerVars.SetUnaccountedEnergy(showerVars.GetUnaccountedEnergy() / m_unaccountedEnergyLimit);
+
+    // Set normalised
+    showerVars.SetIsNormalised(true);
 }
+
+} //namespace ivysaurus

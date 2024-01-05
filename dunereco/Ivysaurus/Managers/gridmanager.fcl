@@ -4,14 +4,15 @@ BEGIN_PROLOG
 
 grid_manager:
 {
-  HitModuleLabel:   "hitfd"
-  RecoModuleLabel:  "pandora"
-  TrackModuleLabel: "pandoraTrack"
-  ShowerModuleLabel: "pandoraShower"
-  GridSize3D:        25.0
-  GridDimensions:    24
-  RecombFactor:      0.63
-  CalorimetryAlg:    @local::dune10kt_calorimetryalgmc
+  HitModuleLabel:     "hitfd"
+  RecoModuleLabel:    "pandora"
+  TrackModuleLabel:   "pandoraTrack"
+  ShowerModuleLabel:  "pandoraShower"
+  GridSize3D:          25.0
+  GridDimensions:      24
+  MaxGridEntry:        0.01
+  RecombFactor:        0.63
+  CalorimetryAlg:      @local::dune10kt_calorimetryalgmc
 }
 
 END_PROLOG

@@ -122,7 +122,7 @@ private:
   GridManager m_gridManager;
   TrackVarManager m_trackVarManager;
   ShowerVarManager m_showerVarManager;
-  IvysaurusEvaluator m_ivysaurusEvaluator;
+    //IvysaurusEvaluator m_ivysaurusEvaluator;
 
   // FCL module labels
   std::string m_hitModuleLabel;
@@ -172,7 +172,7 @@ IvysaurusTrainingFiles::IvysaurusTrainingFiles(fhicl::ParameterSet const &pset) 
     m_gridManager(pset.get<fhicl::ParameterSet>("GridManager")),
     m_trackVarManager(pset.get<fhicl::ParameterSet>("TrackVarManager")),
     m_showerVarManager(pset.get<fhicl::ParameterSet>("ShowerVarManager")),
-    m_ivysaurusEvaluator(pset.get<fhicl::ParameterSet>("IvysaurusEvaluator")),
+    //m_ivysaurusEvaluator(pset.get<fhicl::ParameterSet>("IvysaurusEvaluator")),
     m_hitModuleLabel(pset.get<std::string>("HitModuleLabel")),
     m_recoModuleLabel(pset.get<std::string>("RecoModuleLabel")),
     m_completenessThreshold(pset.get<float>("CompletenessThreshold")),
@@ -293,9 +293,9 @@ void IvysaurusTrainingFiles::analyze(const art::Event &evt)
         // Now, apply quality cuts
         ////////////////////////////////////////////  
 
-        std::cout << "m_completeness: " << m_completeness.back() << std::endl;
-        std::cout << "m_purity: " << m_purity.back() << std::endl;
-        std::cout << "spacepoints.size(): " << spacepoints.size() << std::endl;
+        //std::cout << "m_completeness: " << m_completeness.back() << std::endl;
+        //std::cout << "m_purity: " << m_purity.back() << std::endl;
+        //std::cout << "spacepoints.size(): " << spacepoints.size() << std::endl;
 
         if ((m_completeness.back() < m_completenessThreshold) || (m_purity.back() < m_purityThreshold) || (spacepoints.size() < m_nSpacepointThreshold))
             continue;
@@ -387,7 +387,7 @@ void IvysaurusTrainingFiles::analyze(const art::Event &evt)
         ////////////////////////////////////////////                                                                                                                                                                                    
         // Just leave this here a minute
         ////////////////////////////////////////////  
-        m_ivysaurusEvaluator.IvysaurusUseEvaluate(evt, pfparticle);
+        //m_ivysaurusEvaluator.IvysaurusUseEvaluate(evt, pfparticle);
 
         ////////////////////////////////////////////                                                                                                                                                                                    
         // Now fill the track variables
@@ -411,7 +411,10 @@ void IvysaurusTrainingFiles::analyze(const art::Event &evt)
         // Now fill the shower variables
         ////////////////////////////////////////////  
         ShowerVarManager::ShowerVars showerVars;
+
         m_showerVarsSuccessful.push_back(m_showerVarManager.EvaluateShowerVars(evt, pfparticle, showerVars) ? 1 : 0);
+        m_showerVarManager.NormaliseShowerVars(showerVars);
+
         m_showerDisplacement.push_back(showerVars.GetDisplacement());
         m_DCA.push_back(showerVars.GetDCA());
         m_trackStubLength.push_back(showerVars.GetTrackStubLength());

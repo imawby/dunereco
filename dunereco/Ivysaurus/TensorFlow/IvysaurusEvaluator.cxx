@@ -22,6 +22,7 @@
 
 #include "dunereco/Ivysaurus/Managers/GridManager.h"
 #include "dunereco/Ivysaurus/Managers/TrackVarManager.h"
+#include "dunereco/Ivysaurus/Managers/ShowerVarManager.h"
 #include "dunereco/Ivysaurus/Utils/IvysaurusUtils.h"
 
 #include "IvysaurusEvaluator.h"
@@ -32,24 +33,62 @@ ivysaurus::IvysaurusEvaluator::IvysaurusEvaluator(fhicl::ParameterSet const &pse
     m_networkDirectory(pset.get<std::string>("NetworkDirectory")), 
     m_gridManager(pset.get<fhicl::ParameterSet>("GridManager")),
     m_trackVarManager(pset.get<fhicl::ParameterSet>("TrackVarManager")),
+    m_showerVarManager(pset.get<fhicl::ParameterSet>("ShowerVarManager")),
     m_recoModuleLabel(pset.get<std::string>("RecoModuleLabel")),
-    m_nTrackVars(pset.get<int>("NTrackVars"))
+    m_nTrackVars(pset.get<int>("NTrackVars")),
+    m_nShowerVars(pset.get<int>("NShowerVars"))
 {
+
+    std::cout << "HELLLLO" << std::endl;
     // Create dummy options.
     tensorflow::SessionOptions sessionOptions;
     tensorflow::RunOptions runOptions;
 
+    std::string directoryPath;
+    cet::search_path sP("FW_SEARCH_PATH");
+    sP.find_file(m_networkDirectory, directoryPath);
+
     // Load the model bundle. (this returns a status code)
-    const auto loadResult = tensorflow::LoadSavedModel(sessionOptions, runOptions, m_networkDirectory, 
+    const auto loadResult = tensorflow::LoadSavedModel(sessionOptions, runOptions, directoryPath, 
         {tensorflow::kSavedModelTagServe}, &m_savedModelBundle);
 
+    // Trying to work out the input/output layers
+/*
+    const auto signatures = m_savedModelBundle.GetSignatures();
+    for (auto &entry : signatures)
+    {
+        std::cout << "entry.first: " << entry.first << std::endl;
+
+        auto inputsMap = entry.second.inputs();
+
+        std::cout << "inputsMap.size(): " << inputsMap.size() << std::endl;
+
+        for (auto &inputEntry : inputsMap)
+        {
+            std::cout << "inputEntry.first: " << inputEntry.first << std::endl;
+            std::cout << "inputEntry.second.getName(): " << inputEntry.second.name() << std::endl;
+        }
+
+        auto outputsMap = entry.second.outputs();
+
+        std::cout << "outputsMap.size(): " << outputsMap.size() << std::endl;
+
+        for (auto &outputEntry : outputsMap)
+        {
+            std::cout << "outputEntry.first: " << outputEntry.first << std::endl;
+            std::cout << "outputEntry.second.getName(): " << outputEntry.second.name() << std::endl;
+        }
+    }
+*/
     // Check if loading was okay.
     TF_CHECK_OK(loadResult);
+    std::cout << "GOOOODBYE" << std::endl;
 }
 
 /////////////////////////////////////////////////////////////
 
-void ivysaurus::IvysaurusEvaluator::IvysaurusUseEvaluate(const art::Event &evt, const art::Ptr<recob::PFParticle> &pfparticle)
+ivysaurus::IvysaurusEvaluator::IvysaurusScores ivysaurus::IvysaurusEvaluator::IvysaurusUseEvaluate(const art::Event &evt, 
+    const art::Ptr<recob::PFParticle> &pfparticle)
 {
     // Obtain the input grid tensors
     std::cout << "Making the grid tensors..." << std::endl;
@@ -66,17 +105,31 @@ void ivysaurus::IvysaurusEvaluator::IvysaurusUseEvaluate(const art::Event &evt, 
     std::cout << "Making the track variable tensors..." << std::endl;
     tensorflow::Tensor trackVarTensor = ObtainInputTrackTensor(evt, pfparticle);
 
+    /*
     auto trackVarTensorMap = trackVarTensor.tensor<float, 2>();
-    for (int i =0; i < 10; ++i)
+   
+    for (int i = 0; i < m_nTrackVars; ++i)
         std::cout << "trackVarTensorMap(0, i): " << trackVarTensorMap(0, i) << std::endl;
+    */
 
+    // Obtain the input shower variable tensors
+    std::cout << "Making the shower variable tensors..." << std::endl;
+    tensorflow::Tensor showerVarTensor = ObtainInputShowerTensor(evt, pfparticle);
+
+    /*
+    auto showerVarTensorMap = showerVarTensor.tensor<float, 2>();
+    
+    for (int i = 0; i < m_nShowerVars; ++i)
+        std::cout << "showerVarTensorMap(0, i): " << showerVarTensorMap(0, i) << std::endl;
+    */
 
     // Link the data with some tags so tensorflow know where to put those data entries.
     std::cout << "Hooking up input/output layers..." << std::endl;
     std::vector<std::pair<std::string, tensorflow::Tensor>> feedInputs = {{"serving_default_input_1:0", startTensorU}, {"serving_default_input_2:0", endTensorU},
                                                                           {"serving_default_input_3:0", startTensorV}, {"serving_default_input_4:0", endTensorV},  
                                                                           {"serving_default_input_5:0", startTensorW}, {"serving_default_input_6:0", endTensorW},
-                                                                          {"serving_default_input_7:0", trackVarTensor}};
+                                                                          {"serving_default_input_7:0", trackVarTensor},
+                                                                          {"serving_default_input_8:0", showerVarTensor}};
     std::vector<std::string> fetches = { "StatefulPartitionedCall:0" };
 
     // We need to store the results somewhere.
@@ -88,16 +141,22 @@ void ivysaurus::IvysaurusEvaluator::IvysaurusUseEvaluate(const art::Event &evt, 
 
     // ... and print out it's predictions.
     std::cout << "What does the model predict?..." << std::endl;
-    auto output_map = outputs[0].tensor<float, 2>();
-
     IvysaurusScores ivysaurusScores;
+
+    if (!status.ok())
+    {
+        std::cout << "status not okay, returning...." << std::endl;
+        return ivysaurusScores;
+    }
+
+    auto output_map = outputs[0].tensor<float, 2>();
 
     ivysaurusScores.m_muonScore = output_map(0, 0);
     ivysaurusScores.m_protonScore = output_map(0, 1);
     ivysaurusScores.m_pionScore = output_map(0, 2);
     ivysaurusScores.m_electronScore = output_map(0, 3);
     ivysaurusScores.m_photonScore = output_map(0, 4);
-    ivysaurusScores.m_otherScore = output_map(0, 5);
+    ivysaurusScores.m_otherScore = -1;
 
     float highestScore = -std::numeric_limits<float>::max();
     int count = 0;
@@ -113,7 +172,8 @@ void ivysaurus::IvysaurusEvaluator::IvysaurusUseEvaluate(const art::Event &evt, 
 
         ++count;
     }
-
+/*
+    std::cout << "found an ivysaurus score!!!" << std::endl;
     std::cout << "muonScore: " << ivysaurusScores.m_muonScore << std::endl;
     std::cout << "protonScore: " << ivysaurusScores.m_protonScore << std::endl;
     std::cout << "pionScore: " << ivysaurusScores.m_pionScore << std::endl;
@@ -121,8 +181,10 @@ void ivysaurus::IvysaurusEvaluator::IvysaurusUseEvaluate(const art::Event &evt, 
     std::cout << "photonScore: " << ivysaurusScores.m_photonScore << std::endl;
     std::cout << "otherScore: " << ivysaurusScores.m_otherScore << std::endl;
     std::cout << "particleType: " << ivysaurusScores.m_particleType << std::endl;
-
+*/
     TF_CHECK_OK(status);
+
+    return ivysaurusScores;
 }
 
 /////////////////////////////////////////////////////////////
@@ -172,6 +234,28 @@ tensorflow::Tensor ivysaurus::IvysaurusEvaluator::ObtainInputTrackTensor(const a
     trackVarsTensorMap(0, 9) = trackVars.GetMomentumComparison();
 
     return trackVarTensor;
+}
+
+/////////////////////////////////////////////////////////////
+
+tensorflow::Tensor ivysaurus::IvysaurusEvaluator::ObtainInputShowerTensor(const art::Event &evt, const art::Ptr<recob::PFParticle> &pfparticle)
+{
+    // Order should be: 
+    // displacement, dca, trackStubLength
+
+    tensorflow::Tensor showerVarTensor(tensorflow::DT_FLOAT, tensorflow::TensorShape({1, m_nShowerVars}));
+    auto showerVarsTensorMap = showerVarTensor.tensor<float, 2>();
+
+    ShowerVarManager::ShowerVars showerVars;
+
+    m_showerVarManager.EvaluateShowerVars(evt, pfparticle, showerVars);
+    m_showerVarManager.NormaliseShowerVars(showerVars);
+
+    showerVarsTensorMap(0, 0) = showerVars.GetDisplacement();
+    showerVarsTensorMap(0, 1) = showerVars.GetDCA();
+    showerVarsTensorMap(0, 2) = showerVars.GetTrackStubLength();
+
+    return showerVarTensor;
 }
 
 /////////////////////////////////////////////////////////////

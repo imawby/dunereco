@@ -2,8 +2,9 @@
 #include "showeralgorithms.fcl"
 #include "ctphelper.fcl"
 #include "neutrinoenergyrecoalg_dune.fcl"
-#include "highestpandizzleselector.fcl"
-#include "highestpandrizzleselector.fcl"
+#include "ivysaurusevaluator.fcl"
+#include "pandizzle.fcl"
+#include "pandrizzle.fcl"
 
 BEGIN_PROLOG
 
@@ -20,17 +21,18 @@ CCNuSelection:
    VertexModuleLabel:           "pandora"
    SpacePointModuleLabel:       "pandora"
    ClusterModuleLabel:          "pandora"
-   HitsModuleLabel:             "linecluster"
+   HitsModuleLabel:             "hitfd"
    POTModuleLabel:              "generator"
-   CVNModuleLabel:              "cvnevalSel"
+   CVNModuleLabel:              "cvneva:cvnresult"
 
    CalorimetryAlg:              @local::dune10kt_calorimetryalgmc
    ShowerEnergyAlg:             @local::dune10kt_showerenergy
-   ctpHelper:                   @local::standard_ctphelper
    NeutrinoEnergyRecoAlg:       @local::dune10kt_neutrinoenergyrecoalg
 
-   RecoTrackSelectorTool:       @local::highest_pandizzle_selector
-   RecoShowerSelectorTool:      @local::highest_pandrizzle_selector
+   PandizzleConfig:        @local::pandizzle
+   PandrizzleConfig:       @local::pandrizzle
+   IvysaurusEvaluator:     @local::ivysaurus_evaluator
+   ctpHelper:              @local::standard_ctphelper
 }
 
 END_PROLOG

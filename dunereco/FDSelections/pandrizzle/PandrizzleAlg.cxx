@@ -35,7 +35,7 @@
 
 namespace
 {
-  constexpr Float_t kDefValue(std::numeric_limits<Float_t>::lowest());
+  constexpr Float_t kDefValue(-9999.f);
 
   using namespace FDSelection;
 
@@ -732,7 +732,7 @@ void FDSelection::PandrizzleAlg::GetShowerRegionVariables(const TVector3 &nuVert
     art::ServiceHandle<geo::Geometry const> theGeometry;
     auto const detProp = art::ServiceHandle<detinfo::DetectorPropertiesService const>()->DataFor(evt);
 
-    std::vector<art::Ptr<recob::Hit>> allShowerHits(dune_ana::DUNEAnaPFParticleUtils::GetHits(pfp, evt, "pandoraSel"));
+    std::vector<art::Ptr<recob::Hit>> allShowerHits(dune_ana::DUNEAnaPFParticleUtils::GetHits(pfp, evt, fRecoModuleLabel));
     std::vector<art::Ptr<recob::Hit>> showerHitsU, showerHitsV, showerHitsW;
     pandora::CartesianPointVector cartesianPointVectorU, cartesianPointVectorV, cartesianPointVectorW;
 

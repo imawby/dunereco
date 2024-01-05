@@ -57,18 +57,18 @@ FDSelection::PandizzleAlg::PandizzleAlg(const fhicl::ParameterSet& pset) :
 {
   Reset(fInputsToReader);
 
-  fPandizzleReader.AddVariable("PFPMichelNHits", GetVarPtr(kMichelNHits));
-  fPandizzleReader.AddVariable("PFPMichelElectronMVA", GetVarPtr(kMichelElectronMVA)); 
-  fPandizzleReader.AddVariable("PFPMichelRecoEnergyPlane2", GetVarPtr(kMichelRecoEnergyPlane2));
-  fPandizzleReader.AddVariable("PFPTrackDeflecAngleSD", GetVarPtr(kTrackDeflecAngleSD));
-  fPandizzleReader.AddVariable("PFPTrackLength", GetVarPtr(kTrackLength));
-  fPandizzleReader.AddVariable("PFPTrackEvalRatio", GetVarPtr(kEvalRatio));
-  fPandizzleReader.AddVariable("PFPTrackConcentration", GetVarPtr(kConcentration));
-  fPandizzleReader.AddVariable("PFPTrackCoreHaloRatio", GetVarPtr(kCoreHaloRatio));
-  fPandizzleReader.AddVariable("PFPTrackConicalness", GetVarPtr(kConicalness));
-  fPandizzleReader.AddVariable("PFPTrackdEdxStart", GetVarPtr(kdEdxStart));
-  fPandizzleReader.AddVariable("PFPTrackdEdxEnd", GetVarPtr(kdEdxEnd));
-  fPandizzleReader.AddVariable("PFPTrackdEdxEndRatio", GetVarPtr(kdEdxEndRatio));
+  fPandizzleReader.AddVariable("MichelNHits", GetVarPtr(kMichelNHits));
+  fPandizzleReader.AddVariable("MichelElectronMVA", GetVarPtr(kMichelElectronMVA)); 
+  fPandizzleReader.AddVariable("MichelRecoEnergyPlane2", GetVarPtr(kMichelRecoEnergyPlane2));
+  fPandizzleReader.AddVariable("DeflecAngleSD", GetVarPtr(kTrackDeflecAngleSD));
+  fPandizzleReader.AddVariable("Length", GetVarPtr(kTrackLength));
+  fPandizzleReader.AddVariable("EvalRatio", GetVarPtr(kEvalRatio));
+  fPandizzleReader.AddVariable("Concentration", GetVarPtr(kConcentration));
+  fPandizzleReader.AddVariable("CoreHaloRatio", GetVarPtr(kCoreHaloRatio));
+  fPandizzleReader.AddVariable("Conicalness", GetVarPtr(kConicalness));
+  fPandizzleReader.AddVariable("dEdxStart", GetVarPtr(kdEdxStart));
+  fPandizzleReader.AddVariable("dEdxEnd", GetVarPtr(kdEdxEnd));
+  fPandizzleReader.AddVariable("dEdxEndRatio", GetVarPtr(kdEdxEndRatio));
 
   const std::string weightFileName(fPandizzleWeightFileName);
   std::string weightFilePath;
@@ -213,8 +213,7 @@ void FDSelection::PandizzleAlg::ProcessPFParticle(const art::Ptr<recob::PFPartic
 
   FillMVAVariables(pfp, evt);
 
-  if (child_pfps.size() != 0)
-    FillMichelElectronVariables(pfp, evt);
+  FillMichelElectronVariables(pfp, evt);
 
   FillTrackVariables(pfp, evt);
 
@@ -324,7 +323,10 @@ void FDSelection::PandizzleAlg::FillMichelElectronVariables(const art::Ptr<recob
   fVarHolder.FloatVars["PFPMichelRecoEnergyPlane2"] = -2;
 
   std::vector<art::Ptr<recob::PFParticle>> child_pfps = dune_ana::DUNEAnaPFParticleUtils::GetChildParticles(mu_pfp, evt, fRecoModuleLabel);
-  
+
+  if (child_pfps.empty())
+      return;
+
   //Get the shower handle
   art::Handle< std::vector<recob::Shower> > showerListHandle;
   if (!(evt.getByLabel(fShowerModuleLabel, showerListHandle))){
@@ -596,6 +598,21 @@ FDSelection::PandizzleAlg::Record FDSelection::PandizzleAlg::RunPID(const art::P
 
   ResetTreeVariables();
   ProcessPFParticle(pfp, evt);
+
+  /*
+  std::cout << "PFPMichelNHits: " << fVarHolder.IntVars["PFPMichelNHits"] << std::endl;
+  std::cout << "PFPMichelElectronMVA: " << fVarHolder.FloatVars["PFPMichelElectronMVA"] << std::endl;
+  std::cout << "PFPMichelRecoEnergyPlane2: " << fVarHolder.FloatVars["PFPMichelRecoEnergyPlane2"] << std::endl;
+  std::cout << "PFPTrackDeflecAngleSD: " << fVarHolder.FloatVars["PFPTrackDeflecAngleSD"] << std::endl;
+  std::cout << "PFPTrackLength: " << fVarHolder.FloatVars["PFPTrackLength"] << std::endl;
+  std::cout << "PFPTrackEvalRatio: " << fVarHolder.FloatVars["PFPTrackEvalRatio"] << std::endl;
+  std::cout << "PFPTrackConcentration: " << fVarHolder.FloatVars["PFPTrackConcentration"] << std::endl;
+  std::cout << "PFPTrackCoreHaloRatio: " << fVarHolder.FloatVars["PFPTrackCoreHaloRatio"] << std::endl;
+  std::cout << "PFPTrackConicalness: " << fVarHolder.FloatVars["PFPTrackConicalness"] << std::endl;
+  std::cout << "PFPTrackdEdxStart: " << fVarHolder.FloatVars["PFPTrackdEdxStart"] << std::endl;
+  std::cout << "PFPTrackdEdxEnd: " << fVarHolder.FloatVars["PFPTrackdEdxEnd"] << std::endl;
+  std::cout << "PFPTrackdEdxEndRatio: " << fVarHolder.FloatVars["PFPTrackdEdxEndRatio"] << std::endl;
+  */
 
   if (fVarHolder.BoolVars["MVAVarsFilled"])
   {
