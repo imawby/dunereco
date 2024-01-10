@@ -37,10 +37,13 @@ namespace IvysaurusUtils
     // Function to obtain the Pandora view of a LArSoft hit
     const PandoraView GetPandora2DView(const art::Ptr<recob::Hit> &hit);
 
+    void ObtainPandoraHitPositionAndWidth(const art::Event &evt, const art::Ptr<recob::Hit> hit, 
+        const PandoraView hitType, TVector3 &pandoraHitPosition, float &width);
+    /*
     // Function to find the 2D Pandora coordinate of a LArSoft hit
     const TVector3 ObtainPandoraHitPosition(const art::Event &evt, const art::Ptr<recob::Hit> hit, 
         const PandoraView hitType);
-
+    */
     // Function to obtain the Pandora U coordinate from LArSoft Y/Z coordinates
     float YZToU(const float yCoord, const float zCoord);
 
@@ -55,6 +58,10 @@ namespace IvysaurusUtils
 
     double HitPurityFromTrueParticleID(detinfo::DetectorClocksData const& clockData, const std::vector<art::Ptr<recob::Hit>> &selectedHits,
         const int trackID);
+
+    float IntegrateGaussian(const float limitA, const float limitB, const float mean, const float std, const float stepSize);
+
+    float TrapeziumRule(const float lowerLimit, const float upperLimit, const float mean, const float std);
 }
 
 #endif

@@ -38,10 +38,12 @@ namespace ivysaurus
 {
 
 GridManager::Grid::Grid(const TVector3 origin, const float driftSpan, const float wireSpan, 
-    const unsigned int dimensions, const float maxGridEntry, const IvysaurusUtils::PandoraView pandoraView, 
-    const bool isInitialised) : 
+    const unsigned int dimensions, const float maxGridEntry, const unsigned int nSigmaConsidered, const float integralStep,
+    const IvysaurusUtils::PandoraView pandoraView, const bool isInitialised) : 
         m_axisDimensions(dimensions),
         m_maxGridEntry(maxGridEntry),
+        m_nSigmaConsidered(nSigmaConsidered),
+        m_integralStep(integralStep),
         m_pandoraView(pandoraView),
         m_isInitialised(isInitialised)
 {
@@ -58,78 +60,131 @@ GridManager::Grid::Grid(const TVector3 origin, const float driftSpan, const floa
     for (unsigned int i = 0; i <= m_axisDimensions; ++i)
         m_wireBoundaries.push_back(origin.Z() + (i * wireInterval));
 
-    m_isAveraged = false;
     m_isNormalised = false;
 }
 
 /////////////////////////////////////////////////////////////
 
-bool GridManager::Grid::IsInsideGrid(const TVector3 &position) const
+bool GridManager::Grid::IsInsideGrid(const TVector3 &position, const float width) const
 {
-    const float lowerDriftCoord(std::min(m_driftBoundaries.front(), m_driftBoundaries.back()));
-    const float higherDriftCoord(std::max(m_driftBoundaries.front(), m_driftBoundaries.back()));
+    //////////////////////////////////////
+    // Wire axis
+    const float gridMinWireCoord(std::min(m_wireBoundaries.front(), m_wireBoundaries.back()));
+    const float gridMaxWireCoord(std::max(m_wireBoundaries.front(), m_wireBoundaries.back()));
+    const float hitWireCoord(position.Z());
 
-    if ((position.X() < lowerDriftCoord) || (position.X() > higherDriftCoord))
+    if (std::fabs(gridMinWireCoord - hitWireCoord) < std::numeric_limits<float>::epsilon())
         return false;
 
-    const float lowerWireCoord(std::min(m_wireBoundaries.front(), m_wireBoundaries.back()));
-    const float higherWireCoord(std::max(m_wireBoundaries.front(), m_wireBoundaries.back()));
-
-    if ((position.Z() < lowerWireCoord) || (position.Z() > higherWireCoord))
+    if (std::fabs(gridMaxWireCoord - hitWireCoord) < std::numeric_limits<float>::epsilon())
         return false;
+
+    if ((hitWireCoord < gridMinWireCoord) || (hitWireCoord > gridMaxWireCoord))
+        return false;
+    //////////////////////////////////////
+
+    //////////////////////////////////////
+    // Drift axis
+    const float gridMinDriftCoord(std::min(m_driftBoundaries.front(), m_driftBoundaries.back()));
+    const float gridMaxDriftCoord(std::max(m_driftBoundaries.front(), m_driftBoundaries.back()));
+    const float hitMinDriftCoord = position.X() - (m_nSigmaConsidered * (width / 2.0));
+    const float hitMaxDriftCoord = position.X() + (m_nSigmaConsidered * (width / 2.0));
+
+    if ((hitMinDriftCoord < gridMinDriftCoord) && (hitMaxDriftCoord < gridMinDriftCoord))
+        return false;
+
+    if ((hitMinDriftCoord > gridMaxDriftCoord) && (hitMaxDriftCoord > gridMaxDriftCoord))
+        return false;
+    //////////////////////////////////////
 
     return true;
 }
 
 /////////////////////////////////////////////////////////////
 
-void GridManager::Grid::AddToGrid(const TVector3 &position, const float energy, const float weight)
+void GridManager::Grid::AddToGrid(const TVector3 &position, const float width, const float energy)
 {
-    // Get drift bin
-    const float driftInterval = std::fabs(m_driftBoundaries.at(0) - m_driftBoundaries.at(1));
-    const unsigned int driftBin = std::fabs(position.X() - m_driftBoundaries.front()) < std::numeric_limits<float>::epsilon() ? 0 : 
-        std::fabs(position.X() - m_driftBoundaries.back()) < std::numeric_limits<float>::epsilon() ? (m_axisDimensions - 1) :
-        std::floor(std::fabs(position.X() - m_driftBoundaries.front()) / driftInterval); 
-
-    // Can get some annoying floating point precision instances
-    if (driftBin >= m_axisDimensions)
-        return;
-
+    //////////////////////////////////////
     // Get wire bin
     const float wireInterval = std::fabs(m_wireBoundaries.at(0) - m_wireBoundaries.at(1));
-    const unsigned int wireBin = std::fabs(position.Z() - m_wireBoundaries.front()) < std::numeric_limits<float>::epsilon() ? 0 : 
-        std::fabs(position.Z() - m_wireBoundaries.back()) < std::numeric_limits<float>::epsilon() ? (m_axisDimensions - 1) :
-        std::floor(std::fabs(position.Z() - m_wireBoundaries.front()) / wireInterval); 
+    const unsigned int wireBin = std::floor((position.Z() - m_wireBoundaries.front()) / wireInterval); 
 
-    // Can get some annoying floating point precision instances
-    if (wireBin >= m_axisDimensions)
+    if (wireBin < 0)
         return;
 
-    // Now fill grid
-    m_gridValues[driftBin][wireBin] += energy;
-    m_countValues[driftBin][wireBin] += weight;
-}
+    if (wireBin >= m_axisDimensions)
+        return;
+    //////////////////////////////////////
 
+    //////////////////////////////////////
+    // Now fill assuming hits are Gaussian...
+    const float driftInterval = std::fabs(m_driftBoundaries.at(0) - m_driftBoundaries.at(1));
+    const float hitLowEdge = position.X() - (m_nSigmaConsidered * (width / 2.f));
+    const float hitHighEdge = position.X() + (m_nSigmaConsidered * (width / 2.f));
 
-/////////////////////////////////////////////////////////////
+    float hitStartEdge = hitLowEdge;
+    float hitEndEdge = hitHighEdge;
+    int startDriftBin = std::floor((hitStartEdge - m_driftBoundaries.front()) / driftInterval); 
+    int endDriftBin = std::floor((hitEndEdge - m_driftBoundaries.front()) / driftInterval);
 
-void GridManager::Grid::AverageGrid()
-{
-    if (m_isAveraged)
-        throw cet::exception("ivysaur::GridManager") << "the entries are already averaged!";
-
-    for (unsigned int driftIndex = 0; driftIndex < m_axisDimensions; ++driftIndex)
+    if (m_driftBoundaries.back() < m_driftBoundaries.front())
     {
-        for (unsigned int wireIndex = 0; wireIndex < m_axisDimensions; ++wireIndex)
-        {
-            if (m_countValues[driftIndex][wireIndex] < std::numeric_limits<float>::epsilon())
-                continue;
-
-            m_gridValues[driftIndex][wireIndex] /= m_countValues[driftIndex][wireIndex];
-        }
+        hitStartEdge = hitHighEdge;
+        hitEndEdge = hitLowEdge;
+        startDriftBin = std::floor((m_driftBoundaries.front() - hitStartEdge) / driftInterval);
+        endDriftBin = std::floor((m_driftBoundaries.front() - hitEndEdge) / driftInterval);
     }
 
-    m_isAveraged = true;
+    /*
+    std::cout << "-------------------------------------------" << std::endl;
+    for (int i = startDriftBin; i <= (endDriftBin+1); ++i)
+    {
+        if (i < 0)
+            continue;
+
+        if (i >= static_cast<int>(m_axisDimensions))
+            continue;
+
+        std::cout << "m_driftBoundaries.at(" << i << "): " << m_driftBoundaries.at(i) << std::endl;
+    }
+
+    std::cout << "hitLowEdge: " << hitLowEdge << std::endl;
+    std::cout << "hitHighEdge: " << hitHighEdge << std::endl;
+    std::cout << "hitStartEdge: " << hitStartEdge << std::endl;
+    std::cout << "hitEndEdge: " << hitEndEdge << std::endl;
+    std::cout << "startDriftBin: " << startDriftBin << std::endl;
+    std::cout << "endDriftBin: " << endDriftBin << std::endl;
+    
+    std::cout << "-------------------------------------------" << std::endl;
+    std::cout << "total energy: " << energy << std::endl;
+    */
+    for (int iDriftBin = startDriftBin; iDriftBin <= endDriftBin; ++iDriftBin)
+    {
+        if (iDriftBin < 0)
+            continue;
+
+        if (iDriftBin >= static_cast<int>(m_axisDimensions))
+            continue;
+
+        const float integralStartX = (iDriftBin == startDriftBin) ? hitStartEdge : m_driftBoundaries.at(iDriftBin);
+        const float integralEndX = (iDriftBin == endDriftBin) ? hitEndEdge : m_driftBoundaries.at(iDriftBin + 1);
+
+        // Integrate the Gaussian area... (atm just go for uniform)
+        const float chargeFraction = IvysaurusUtils::IntegrateGaussian(integralStartX, integralEndX, position.X(), (width / 2.f), m_integralStep); 
+        const float entryEnergy = energy * chargeFraction;
+      
+        /*  
+        std::cout << "/////////////////////////////////" << std::endl;
+        std::cout << "Filling between " << "(" << m_driftBoundaries.at(iDriftBin) << ", " << m_driftBoundaries.at(iDriftBin + 1) << ")" << std::endl;
+        std::cout << "with charge fraction: " << chargeFraction << std::endl;
+        std::cout << "and energy: " << entryEnergy << std::endl; 
+        std::cout << "/////////////////////////////////" << std::endl;
+        */
+        // Now fill grid
+        m_gridValues[iDriftBin][wireBin] += entryEnergy;
+    }
+
+    std::cout << "-------------------------------------------" << std::endl;     
 }
 
 /////////////////////////////////////////////////////////////
@@ -169,6 +224,8 @@ GridManager::GridManager(const fhicl::ParameterSet& pset) :
     m_gridSize3D(pset.get<float>("GridSize3D")),
     m_dimensions(pset.get<float>("GridDimensions")),
     m_maxGridEntry(pset.get<float>("MaxGridEntry")),
+    m_nSigmaConsidered(pset.get<unsigned int>("NSigmaConsidered")),
+    m_integralStep(pset.get<float>("IntegralStep")),
     m_recombFactor(pset.get<float>("RecombFactor")),
     m_calorimetryAlg(pset.get<fhicl::ParameterSet>("CalorimetryAlg"))
 {
@@ -189,7 +246,7 @@ GridManager::Grid GridManager::ObtainViewGrid(const art::Event &evt, const art::
     const auto metaMap = metadata->GetPropertiesMap();
 
     if (metaMap.find("TrackScore") == metaMap.end())
-        return Grid(TVector3(0.f, 0.f, 0.f), 0.f, 0.f, 0, m_maxGridEntry, pandoraView, false);
+        return Grid(TVector3(0.f, 0.f, 0.f), 0.f, 0.f, 0, m_maxGridEntry, m_nSigmaConsidered, m_integralStep, pandoraView, false);
 
     const float trackScore = metaMap.at("TrackScore");
 
@@ -205,7 +262,7 @@ GridManager::Grid GridManager::ObtainViewGrid(const art::Event &evt, const art::
             {
                 if (!GetStartExtremalPointsShower(evt, pfparticle, position1, position2))
                 {
-                    return Grid(TVector3(0.f, 0.f, 0.f), 0.f, 0.f, 0, m_maxGridEntry, pandoraView, false);
+                    return Grid(TVector3(0.f, 0.f, 0.f), 0.f, 0.f, 0, m_maxGridEntry, m_nSigmaConsidered, m_integralStep, pandoraView, false);
                 }
             }
         }
@@ -215,7 +272,7 @@ GridManager::Grid GridManager::ObtainViewGrid(const art::Event &evt, const art::
             {
                 if (!GetStartExtremalPointsTrack(evt, pfparticle, position1, position2))
                 {
-                    return Grid(TVector3(0.f, 0.f, 0.f), 0.f, 0.f, 0, m_maxGridEntry, pandoraView, false);
+                    return Grid(TVector3(0.f, 0.f, 0.f), 0.f, 0.f, 0, m_maxGridEntry, m_nSigmaConsidered, m_integralStep, pandoraView, false);
                 }
             }
         }
@@ -228,7 +285,7 @@ GridManager::Grid GridManager::ObtainViewGrid(const art::Event &evt, const art::
             {
                 if (!GetEndExtremalPointsShower(evt, pfparticle, position1, position2))
                 {
-                    return Grid(TVector3(0.f, 0.f, 0.f), 0.f, 0.f, 0, m_maxGridEntry, pandoraView, false);
+                    return Grid(TVector3(0.f, 0.f, 0.f), 0.f, 0.f, 0, m_maxGridEntry, m_nSigmaConsidered, m_integralStep, pandoraView, false);
                 }
             }
         }
@@ -238,7 +295,7 @@ GridManager::Grid GridManager::ObtainViewGrid(const art::Event &evt, const art::
             {
                 if (!GetEndExtremalPointsTrack(evt, pfparticle, position1, position2))
                 {
-                    return Grid(TVector3(0.f, 0.f, 0.f), 0.f, 0.f, 0, m_maxGridEntry, pandoraView, false);
+                    return Grid(TVector3(0.f, 0.f, 0.f), 0.f, 0.f, 0, m_maxGridEntry, m_nSigmaConsidered, m_integralStep, pandoraView, false);
                 }
             }
         }
@@ -250,7 +307,7 @@ GridManager::Grid GridManager::ObtainViewGrid(const art::Event &evt, const art::
     const float driftSpan = projectedPosition2.X() - projectedPosition1.X();
     const float wireSpan = projectedPosition2.Z() - projectedPosition1.Z();
 
-    return Grid(projectedPosition1, driftSpan, wireSpan, m_dimensions, m_maxGridEntry, pandoraView, true);
+    return Grid(projectedPosition1, driftSpan, wireSpan, m_dimensions, m_maxGridEntry, m_nSigmaConsidered, m_integralStep, pandoraView, true);
 }
 
 /////////////////////////////////////////////////////////////
@@ -356,21 +413,21 @@ void GridManager::FillViewGrid(const art::Event &evt, const art::Ptr<recob::PFPa
         if (thisPandoraView != pandoraView)
             continue;
 
-        // Get 2D hit position
-        const TVector3 pandoraHitPosition = IvysaurusUtils::ObtainPandoraHitPosition(evt, hit, pandoraView);
+        // Get 2D hit position and width
+        float hitWidth = 0.f;
+        TVector3 pandoraHitPosition = TVector3(0.f, 0.f, 0.f);
+        IvysaurusUtils::ObtainPandoraHitPositionAndWidth(evt, hit, pandoraView, pandoraHitPosition, hitWidth);
 
-        if (!grid.IsInsideGrid(pandoraHitPosition))
+        // Check hit is inside grid
+        if (!grid.IsInsideGrid(pandoraHitPosition, hitWidth))
             continue;
 
-        // TODO - these are just fillers
+        // Add its energy to the grid
         const float energy = ObtainHitEnergy(evt, hit);
-        const float weight = 1.f;
-
-        grid.AddToGrid(pandoraHitPosition, energy, weight);
+        grid.AddToGrid(pandoraHitPosition, hitWidth, energy);
     }
 
-    grid.AverageGrid();
-    grid.NormaliseGrid();
+    //grid.NormaliseGrid();
 }
 
 /////////////////////////////////////////////////////////////

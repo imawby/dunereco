@@ -296,7 +296,9 @@ float ShowerVarManager::GetViewNuVertexChargeAsymmetry(const art::Event &evt, co
 
     for (const art::Ptr<recob::Hit> &viewHit : viewHits)
     {
-        const TVector3 hitPosition = IvysaurusUtils::ObtainPandoraHitPosition(evt, viewHit, pandoraView);
+        float width = 0.f;
+        TVector3 hitPosition = TVector3(0.f, 0.f, 0.f);
+        IvysaurusUtils::ObtainPandoraHitPositionAndWidth(evt, viewHit, pandoraView, hitPosition, width);
         const float l = orthAxis.Dot(hitPosition - viewNuVertex);
         float charge = std::fabs(dune_ana::DUNEAnaHitUtils::LifetimeCorrectedTotalHitCharge(clockData, detProp, {viewHit}));
 
