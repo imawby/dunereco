@@ -11,6 +11,8 @@ grid_manager:
   GridSize3D:          25.0
   GridDimensions:      24
   MaxGridEntry:        0.01
+  NSigmaConsidered:    3
+  IntegralStep:        0.1
   RecombFactor:        0.63
   CalorimetryAlg:      @local::dune10kt_calorimetryalgmc
 }

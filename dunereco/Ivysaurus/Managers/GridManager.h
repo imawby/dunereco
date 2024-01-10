@@ -33,7 +33,7 @@ class GridManager
   {
     public:
       Grid(const TVector3 origin, const float driftSpan, const float wireSpan, const unsigned int dimensions, const float maxGridEntry, 
-          const IvysaurusUtils::PandoraView pandoraView, const bool isInitialised);
+          const unsigned int nSigmaConsidered, const float integralStep, const IvysaurusUtils::PandoraView pandoraView, const bool isInitialised);
 
       unsigned int GetAxisDimensions() const;
       std::vector<float> GetDriftBoundaries() const;
@@ -42,16 +42,16 @@ class GridManager
       std::vector<std::vector<float>> GetCountValues() const;
       IvysaurusUtils::PandoraView GetPandoraView() const;
       bool IsInitialised() const;
-      bool IsAveraged() const;
       bool IsNormalised() const;
-      bool IsInsideGrid(const TVector3 &position) const;
-      void AddToGrid(const TVector3 &position, const float energy, const float weight);
-      void AverageGrid();
+      bool IsInsideGrid(const TVector3 &position, const float width) const;
+      void AddToGrid(const TVector3 &position, const float width, const float energy);
       void NormaliseGrid();
 
     private:
       unsigned int m_axisDimensions; // number of bins on each axis
       float m_maxGridEntry;
+      unsigned int m_nSigmaConsidered;                                                                                                                                                                                                                 
+      float m_integralStep; 
       std::vector<float> m_driftBoundaries;
       std::vector<float> m_wireBoundaries;
       std::vector<std::vector<float>> m_gridValues; // driftBin : [wireBins]
@@ -96,6 +96,8 @@ class GridManager
     float m_gridSize3D;
     unsigned int m_dimensions;
     float m_maxGridEntry;
+    unsigned int m_nSigmaConsidered;                                                                                                                                                                                           
+    float m_integralStep;
     float m_recombFactor;
     calo::CalorimetryAlg m_calorimetryAlg;
 };
@@ -147,13 +149,6 @@ inline IvysaurusUtils::PandoraView GridManager::Grid::GetPandoraView() const
 inline bool GridManager::Grid::IsInitialised() const 
 { 
     return m_isInitialised;
-}
-
-/////////////////////////////////////////////////////////////
-
-inline bool GridManager::Grid::IsAveraged() const 
-{ 
-    return m_isAveraged;
 }
 
 /////////////////////////////////////////////////////////////

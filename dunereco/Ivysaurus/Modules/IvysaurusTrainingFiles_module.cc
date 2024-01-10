@@ -51,14 +51,14 @@ private:
   int m_subrun;
   int m_event;
 
-  std::vector<int> m_truePDG;
-  std::vector<float> m_completeness;
-  std::vector<float> m_purity;
+  int m_truePDG;
+  float m_completeness;
+  float m_purity;
 
-  std::vector<int> m_nSpacePoints;
-  std::vector<int> m_nHits2D;
+  int m_nSpacePoints;
+  int m_nHits2D;
 
-  std::vector<float> m_trackScore;
+  float m_trackScore;
 
   std::vector<std::vector<double>> m_spacePoints;
   std::vector<std::vector<double>> m_projectionsU;
@@ -84,45 +84,45 @@ private:
   std::vector<std::vector<float>> m_endGridValuesW;
 
   // TrackVars
-  std::vector<int> m_trackVarsSuccessful;
-  std::vector<float> m_nTrackChildren;
-  std::vector<float> m_nShowerChildren;
-  std::vector<float> m_nGrandChildren;
-  std::vector<float> m_nChildHits;
-  std::vector<float> m_childEnergy;
-  std::vector<float> m_childTrackScore;
-  std::vector<float> m_trackLength;
-  std::vector<float> m_trackWobble;
-  std::vector<float> m_trackMomComparison;
+  int m_trackVarsSuccessful;
+  float m_nTrackChildren;
+  float m_nShowerChildren;
+  float m_nGrandChildren;
+  float m_nChildHits;
+  float m_childEnergy;
+  float m_childTrackScore;
+  float m_trackLength;
+  float m_trackWobble;
+  float m_trackMomComparison;
 
   // ShowerVars
-  std::vector<int> m_showerVarsSuccessful;
-  std::vector<float> m_showerDisplacement;
-  std::vector<float> m_DCA;
-  std::vector<float> m_trackStubLength;
-  std::vector<float> m_nuVertexAvSeparation;
-  std::vector<float> m_nuVertexChargeAsymmetry;
-  std::vector<float> m_showerFoundConnectionPathway;
-  std::vector<float> m_showerInitialGapSize;
-  std::vector<float> m_showerLargestGapSize;
-  std::vector<float> m_showerPathwayLength;
-  std::vector<float> m_showerPathwayScatteringAngle2D;
-  std::vector<float> m_showerNHits;
-  std::vector<float> m_showerFoundHitRatio;
-  std::vector<float> m_showerScatterAngle;
-  std::vector<float> m_showerOpeningAngle;
-  std::vector<float> m_showerNuVertexEnergyAsymmetry;
-  std::vector<float> m_showerNuVertexEnergyWeightedMeanRadialDistance;
-  std::vector<float> m_showerStartEnergyAsymmetry;
-  std::vector<float> m_showerStartMoliereRadius;
-  std::vector<float> m_showerNAmbiguousViews;
-  std::vector<float> m_showerUnaccountedEnergy;
+  int m_showerVarsSuccessful;
+  float m_showerDisplacement;
+  float m_DCA;
+  float m_trackStubLength;
+  float m_nuVertexAvSeparation;
+  float m_nuVertexChargeAsymmetry;
+  float m_showerFoundConnectionPathway;
+  float m_showerInitialGapSize;
+  float m_showerLargestGapSize;
+  float m_showerPathwayLength;
+  float m_showerPathwayScatteringAngle2D;
+  float m_showerNHits;
+  float m_showerFoundHitRatio;
+  float m_showerScatterAngle;
+  float m_showerOpeningAngle;
+  float m_showerNuVertexEnergyAsymmetry;
+  float m_showerNuVertexEnergyWeightedMeanRadialDistance;
+  float m_showerStartEnergyAsymmetry;
+  float m_showerStartMoliereRadius;
+  float m_showerNAmbiguousViews;
+  float m_showerUnaccountedEnergy;
 
   // Managers
   GridManager m_gridManager;
   TrackVarManager m_trackVarManager;
   ShowerVarManager m_showerVarManager;
-    //IvysaurusEvaluator m_ivysaurusEvaluator;
+  //IvysaurusEvaluator m_ivysaurusEvaluator;
 
   // FCL module labels
   std::string m_hitModuleLabel;
@@ -242,9 +242,9 @@ void IvysaurusTrainingFiles::analyze(const art::Event &evt)
         if (TruthMatchUtils::Valid(g4id))
         {
             art::ServiceHandle<cheat::ParticleInventoryService> piServ;
-            m_completeness.push_back(IvysaurusUtils::CompletenessFromTrueParticleID(clockData, pfpHits, eventHitList, g4id));
-            m_purity.push_back(IvysaurusUtils::HitPurityFromTrueParticleID(clockData, pfpHits, g4id));
-            m_truePDG.push_back(piServ->ParticleList().at(g4id)->PdgCode());
+            m_completeness = IvysaurusUtils::CompletenessFromTrueParticleID(clockData, pfpHits, eventHitList, g4id);
+            m_purity = IvysaurusUtils::HitPurityFromTrueParticleID(clockData, pfpHits, g4id);
+            m_truePDG = piServ->ParticleList().at(g4id)->PdgCode();
         }
         else
         {
@@ -252,10 +252,7 @@ void IvysaurusTrainingFiles::analyze(const art::Event &evt)
         }
 
         // If it isn't a PDG that we care about, move on...
-        int absPDG = std::abs(m_truePDG.back());
-
-
-        std::cout << "absPDG: " << absPDG << std::endl;
+        int absPDG = std::abs(m_truePDG);
 
         if ((absPDG != 13) && (absPDG != 2212) && (absPDG != 211) && (absPDG != 11) & (absPDG != 22))
             continue;
@@ -271,9 +268,7 @@ void IvysaurusTrainingFiles::analyze(const art::Event &evt)
         if (metaMap.find("TrackScore") == metaMap.end())
             continue;
 
-        const float trackScore = metaMap.at("TrackScore");
-
-        m_trackScore.push_back(trackScore);
+        m_trackScore = metaMap.at("TrackScore");
 
         ////////////////////////////////////////////                                                                                                                                                                                    
         // Now, get space points into file.. 
@@ -286,18 +281,18 @@ void IvysaurusTrainingFiles::analyze(const art::Event &evt)
         for (art::Ptr<recob::SpacePoint> spacepoint : spacepoints)
             m_spacePoints.push_back({spacepoint->XYZ()[0], spacepoint->XYZ()[1], spacepoint->XYZ()[2]});
 
-        m_nSpacePoints.push_back(spacepoints.size());
-        m_nHits2D.push_back(pfpHits.size());
+        m_nSpacePoints = spacepoints.size();
+        m_nHits2D = pfpHits.size();
 
         ////////////////////////////////////////////                                                                                                                                                                                    
         // Now, apply quality cuts
         ////////////////////////////////////////////  
 
-        //std::cout << "m_completeness: " << m_completeness.back() << std::endl;
-        //std::cout << "m_purity: " << m_purity.back() << std::endl;
-        //std::cout << "spacepoints.size(): " << spacepoints.size() << std::endl;
+        //std::cout << "m_completeness: " << m_completeness << std::endl;
+        //std::cout << "m_purity: " << m_purity << std::endl;
+        //std::cout << "spacepoints.size(): " << spacepoints << std::endl;
 
-        if ((m_completeness.back() < m_completenessThreshold) || (m_purity.back() < m_purityThreshold) || (spacepoints.size() < m_nSpacepointThreshold))
+        if ((m_completeness < m_completenessThreshold) || (m_purity < m_purityThreshold) || (spacepoints.size() < m_nSpacepointThreshold))
             continue;
 
         ////////////////////////////////////////////                                                                                                                                                                                    
@@ -336,7 +331,9 @@ void IvysaurusTrainingFiles::analyze(const art::Event &evt)
                     continue;
 
                 // Get 2D hit position
-                const TVector3 pandoraHitPosition = IvysaurusUtils::ObtainPandoraHitPosition(evt, hit, pandoraView);
+                float width = 0.f;
+                TVector3 pandoraHitPosition = TVector3(0.f, 0.f, 0.f);
+                IvysaurusUtils::ObtainPandoraHitPositionAndWidth(evt, hit, pandoraView, pandoraHitPosition, width);
                 
                 if (m_writeVisualisationInfo)
                 {
@@ -344,7 +341,7 @@ void IvysaurusTrainingFiles::analyze(const art::Event &evt)
                 }
                 else
                 {
-                    if (startGrid.IsInsideGrid(pandoraHitPosition) || endGrid.IsInsideGrid(pandoraHitPosition))
+                    if (startGrid.IsInsideGrid(pandoraHitPosition, width) || endGrid.IsInsideGrid(pandoraHitPosition, width))
                         projections.push_back({pandoraHitPosition.X(), pandoraHitPosition.Y(), pandoraHitPosition.Z()});
                 }
             }
@@ -394,47 +391,47 @@ void IvysaurusTrainingFiles::analyze(const art::Event &evt)
         ////////////////////////////////////////////  
         TrackVarManager::TrackVars trackVars;
 
-        m_trackVarsSuccessful.push_back(m_trackVarManager.EvaluateTrackVars(evt, pfparticle, trackVars) ? 1 : 0);
+        m_trackVarsSuccessful = m_trackVarManager.EvaluateTrackVars(evt, pfparticle, trackVars) ? 1 : 0;
         m_trackVarManager.NormaliseTrackVars(trackVars);
 
-        m_nTrackChildren.push_back(trackVars.GetNTrackChildren());
-        m_nShowerChildren.push_back(trackVars.GetNShowerChildren());
-        m_nGrandChildren.push_back(trackVars.GetNGrandChildren());
-        m_nChildHits.push_back(trackVars.GetNChildHits());
-        m_childEnergy.push_back(trackVars.GetChildEnergy());
-        m_childTrackScore.push_back(trackVars.GetChildTrackScore());
-        m_trackLength.push_back(trackVars.GetTrackLength());
-        m_trackWobble.push_back(trackVars.GetWobble());
-        m_trackMomComparison.push_back(trackVars.GetMomentumComparison());
+        m_nTrackChildren = trackVars.GetNTrackChildren();
+        m_nShowerChildren = trackVars.GetNShowerChildren();
+        m_nGrandChildren = trackVars.GetNGrandChildren();
+        m_nChildHits = trackVars.GetNChildHits();
+        m_childEnergy = trackVars.GetChildEnergy();
+        m_childTrackScore = trackVars.GetChildTrackScore();
+        m_trackLength = trackVars.GetTrackLength();
+        m_trackWobble = trackVars.GetWobble();
+        m_trackMomComparison = trackVars.GetMomentumComparison();
 
         ////////////////////////////////////////////                                                                                                                                                                                    
         // Now fill the shower variables
         ////////////////////////////////////////////  
         ShowerVarManager::ShowerVars showerVars;
 
-        m_showerVarsSuccessful.push_back(m_showerVarManager.EvaluateShowerVars(evt, pfparticle, showerVars) ? 1 : 0);
+        m_showerVarsSuccessful = m_showerVarManager.EvaluateShowerVars(evt, pfparticle, showerVars) ? 1 : 0;
         m_showerVarManager.NormaliseShowerVars(showerVars);
 
-        m_showerDisplacement.push_back(showerVars.GetDisplacement());
-        m_DCA.push_back(showerVars.GetDCA());
-        m_trackStubLength.push_back(showerVars.GetTrackStubLength());
-        m_nuVertexAvSeparation.push_back(showerVars.GetNuVertexAvSeparation());
-        m_nuVertexChargeAsymmetry.push_back(showerVars.GetNuVertexChargeAsymmetry());
-        m_showerFoundConnectionPathway.push_back(showerVars.GetFoundConnectionPathway());
-        m_showerInitialGapSize.push_back(showerVars.GetInitialGapSize());
-        m_showerLargestGapSize.push_back(showerVars.GetLargestGapSize());
-        m_showerPathwayLength.push_back(showerVars.GetPathwayLength());
-        m_showerPathwayScatteringAngle2D.push_back(showerVars.GetPathwayScatteringAngle2D());
-        m_showerNHits.push_back(showerVars.GetNShowerHits());
-        m_showerFoundHitRatio.push_back(showerVars.GetFoundHitRatio());
-        m_showerScatterAngle.push_back(showerVars.GetScatterAngle());
-        m_showerOpeningAngle.push_back(showerVars.GetOpeningAngle());
-        m_showerNuVertexEnergyAsymmetry.push_back(showerVars.GetNuVertexEnergyAsymmetry());
-        m_showerNuVertexEnergyWeightedMeanRadialDistance.push_back(showerVars.GetNuVertexEnergyWeightedMeanRadialDistance());
-        m_showerStartEnergyAsymmetry.push_back(showerVars.GetShowerStartEnergyAsymmetry());
-        m_showerStartMoliereRadius.push_back(showerVars.GetShowerStartMoliereRadius());
-        m_showerNAmbiguousViews.push_back(showerVars.GetNAmbiguousViews());
-        m_showerUnaccountedEnergy.push_back(showerVars.GetUnaccountedEnergy());
+        m_showerDisplacement = showerVars.GetDisplacement();
+        m_DCA = showerVars.GetDCA();
+        m_trackStubLength = showerVars.GetTrackStubLength();
+        m_nuVertexAvSeparation = showerVars.GetNuVertexAvSeparation();
+        m_nuVertexChargeAsymmetry = showerVars.GetNuVertexChargeAsymmetry();
+        m_showerFoundConnectionPathway = showerVars.GetFoundConnectionPathway();
+        m_showerInitialGapSize = showerVars.GetInitialGapSize();
+        m_showerLargestGapSize = showerVars.GetLargestGapSize();
+        m_showerPathwayLength = showerVars.GetPathwayLength();
+        m_showerPathwayScatteringAngle2D = showerVars.GetPathwayScatteringAngle2D();
+        m_showerNHits = showerVars.GetNShowerHits();
+        m_showerFoundHitRatio = showerVars.GetFoundHitRatio();
+        m_showerScatterAngle = showerVars.GetScatterAngle();
+        m_showerOpeningAngle = showerVars.GetOpeningAngle();
+        m_showerNuVertexEnergyAsymmetry = showerVars.GetNuVertexEnergyAsymmetry();
+        m_showerNuVertexEnergyWeightedMeanRadialDistance = showerVars.GetNuVertexEnergyWeightedMeanRadialDistance();
+        m_showerStartEnergyAsymmetry = showerVars.GetShowerStartEnergyAsymmetry();
+        m_showerStartMoliereRadius = showerVars.GetShowerStartMoliereRadius();
+        m_showerNAmbiguousViews = showerVars.GetNAmbiguousViews();
+        m_showerUnaccountedEnergy = showerVars.GetUnaccountedEnergy();
 
         m_tree->Fill();
     }
@@ -445,19 +442,19 @@ void IvysaurusTrainingFiles::analyze(const art::Event &evt)
 void IvysaurusTrainingFiles::Reset()
 {
   const int defaultInt = -999;
+  const float defaultFloat = -999.f;
 
   m_run = defaultInt;
   m_subrun = defaultInt;
   m_event = defaultInt;
 
-  m_truePDG.clear();
-  m_completeness.clear();
-  m_purity.clear();
+  m_truePDG = defaultInt;
+  m_completeness = defaultFloat;
+  m_purity = defaultFloat;
 
-  m_nSpacePoints.clear();
-  m_nHits2D.clear();
-
-  m_trackScore.clear();
+  m_nSpacePoints = defaultInt;
+  m_nHits2D = defaultInt;
+  m_trackScore = defaultFloat;
 
   m_spacePoints.clear();
   m_projectionsU.clear();
@@ -482,38 +479,38 @@ void IvysaurusTrainingFiles::Reset()
   m_endGridValuesV.clear();
   m_endGridValuesW.clear();
 
-  m_trackVarsSuccessful.clear();
-  m_nTrackChildren.clear();
-  m_nShowerChildren.clear();
-  m_nGrandChildren.clear();
-  m_nChildHits.clear();
-  m_childEnergy.clear();
-  m_childTrackScore.clear();
-  m_trackLength.clear();
-  m_trackWobble.clear();
-  m_trackMomComparison.clear();
+  m_trackVarsSuccessful = 0;
+  m_nTrackChildren = defaultFloat;
+  m_nShowerChildren = defaultFloat;
+  m_nGrandChildren = defaultFloat;
+  m_nChildHits = defaultFloat;
+  m_childEnergy = defaultFloat;
+  m_childTrackScore = defaultFloat;
+  m_trackLength = defaultFloat;
+  m_trackWobble = defaultFloat;
+  m_trackMomComparison = defaultFloat;
 
-  m_showerVarsSuccessful.clear();
-  m_showerDisplacement.clear();
-  m_DCA.clear();
-  m_trackStubLength.clear();
-  m_nuVertexAvSeparation.clear();
-  m_nuVertexChargeAsymmetry.clear();
-  m_showerFoundConnectionPathway.clear();
-  m_showerInitialGapSize.clear();
-  m_showerLargestGapSize.clear();
-  m_showerPathwayLength.clear();
-  m_showerPathwayScatteringAngle2D.clear();
-  m_showerNHits.clear();
-  m_showerFoundHitRatio.clear();
-  m_showerScatterAngle.clear();
-  m_showerOpeningAngle.clear();
-  m_showerNuVertexEnergyAsymmetry.clear();
-  m_showerNuVertexEnergyWeightedMeanRadialDistance.clear();
-  m_showerStartEnergyAsymmetry.clear();
-  m_showerStartMoliereRadius.clear();
-  m_showerNAmbiguousViews.clear();
-  m_showerUnaccountedEnergy.clear();
+  m_showerVarsSuccessful = 0;
+  m_showerDisplacement = defaultFloat;
+  m_DCA = defaultFloat;
+  m_trackStubLength = defaultFloat;
+  m_nuVertexAvSeparation = defaultFloat;
+  m_nuVertexChargeAsymmetry = defaultFloat;
+  m_showerFoundConnectionPathway = defaultFloat;
+  m_showerInitialGapSize = defaultFloat;
+  m_showerLargestGapSize = defaultFloat;
+  m_showerPathwayLength = defaultFloat;
+  m_showerPathwayScatteringAngle2D = defaultFloat;
+  m_showerNHits = defaultFloat;
+  m_showerFoundHitRatio = defaultFloat;
+  m_showerScatterAngle = defaultFloat;
+  m_showerOpeningAngle = defaultFloat;
+  m_showerNuVertexEnergyAsymmetry = defaultFloat;
+  m_showerNuVertexEnergyWeightedMeanRadialDistance = defaultFloat;
+  m_showerStartEnergyAsymmetry = defaultFloat;
+  m_showerStartMoliereRadius = defaultFloat;
+  m_showerNAmbiguousViews = defaultFloat;
+  m_showerUnaccountedEnergy = defaultFloat;
 }
 
 //------------------------------------------------------------------------------------------------------------------------------------------

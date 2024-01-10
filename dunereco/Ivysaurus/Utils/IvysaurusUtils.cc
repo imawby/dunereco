@@ -12,7 +12,7 @@ namespace IvysaurusUtils
 {
 
 /////////////////////////////////////////////////////////////
-
+/*
 const TVector3 ObtainPandoraHitPosition(const art::Event &evt, const art::Ptr<recob::Hit> hit, 
     const PandoraView hitType)
 {
@@ -28,6 +28,31 @@ const TVector3 ObtainPandoraHitPosition(const art::Event &evt, const art::Ptr<re
     geo::Point_t xyz = theGeometry->Cryostat(cryostatID).TPC(hitWireID.TPC).Plane(hitWireID.Plane).Wire(hitWireID.Wire).GetCenter();
 
     return TVector3(xCoord, 0.f, hitType == TPC_VIEW_U ? YZToU(xyz.Y(), xyz.Z()) : hitType == TPC_VIEW_V ? YZToV(xyz.Y(), xyz.Z()) : YZToW(xyz.Y(), xyz.Z()));
+}
+*/
+
+/////////////////////////////////////////////////////////////
+
+void ObtainPandoraHitPositionAndWidth(const art::Event &evt, const art::Ptr<recob::Hit> hit, 
+    const PandoraView hitType, TVector3 &pandoraHitPosition, float &width)
+{
+    art::ServiceHandle<geo::Geometry const> theGeometry;
+    auto const detProp = art::ServiceHandle<detinfo::DetectorPropertiesService const>()->DataFor(evt);
+
+    const geo::WireID hitWireID = hit->WireID();
+    const geo::CryostatID cryostatID(hitWireID.Cryostat);
+    const double hitTime = hit->PeakTime();
+    const double hitTimeStart = hit->PeakTimeMinusRMS();
+    const double hitTimeEnd = hit->PeakTimePlusRMS();
+    const double xCoord = detProp.ConvertTicksToX(hitTime, hitWireID.Plane, hitWireID.TPC, hitWireID.Cryostat);
+    const double xCoordStart = detProp.ConvertTicksToX(hitTimeStart, hitWireID.Plane, hitWireID.TPC, hitWireID.Cryostat);
+    const double xCoordEnd = detProp.ConvertTicksToX(hitTimeEnd, hitWireID.Plane, hitWireID.TPC, hitWireID.Cryostat);
+
+    // Get hit Y and Z coordinates, based on central position of wire
+    geo::Point_t xyz = theGeometry->Cryostat(cryostatID).TPC(hitWireID.TPC).Plane(hitWireID.Plane).Wire(hitWireID.Wire).GetCenter();
+
+    pandoraHitPosition = TVector3(xCoord, 0.f, hitType == TPC_VIEW_U ? YZToU(xyz.Y(), xyz.Z()) : hitType == TPC_VIEW_V ? YZToV(xyz.Y(), xyz.Z()) : YZToW(xyz.Y(), xyz.Z()));
+    width = std::fabs(xCoordEnd - xCoordStart);
 }
 
 /////////////////////////////////////////////////////////////
@@ -131,6 +156,41 @@ double HitPurityFromTrueParticleID(detinfo::DetectorClocksData const& clockData,
 
     return purity;
 }
+
+/////////////////////////////////////////////////////////////
+
+float IntegrateGaussian(const float limitA, const float limitB, const float mean, const float std, const float stepSize)
+{
+    const float globalIntegralMin = std::min(limitA, limitB);
+    const float globalIntegralMax = std::max(limitA, limitB);
+    float localIntegralMin = globalIntegralMin;
+    float integralSum = 0.f;
+
+    while (localIntegralMin < globalIntegralMax)
+    {
+        float localIntegralMax = localIntegralMin + stepSize;
+        localIntegralMax = std::min(localIntegralMax, globalIntegralMax);
+        integralSum += TrapeziumRule(localIntegralMin, localIntegralMax, mean, std);
+        localIntegralMin += stepSize;
+    }
+
+    return integralSum;
+}
+
+/////////////////////////////////////////////////////////////
+
+float TrapeziumRule(const float lowerLimit, const float upperLimit, const float mean, const float std)
+{
+    const float lowerExpN = (-1.f) * (lowerLimit - mean) * (lowerLimit - mean);
+    const float upperExpN = (-1.f) * (upperLimit - mean) * (upperLimit - mean);
+    const float expD = 2 * std * std;
+    const float amp = (1.0) / (std::sqrt(2.0 * M_PI) * std);
+    const float lowerEval = amp * std::exp(lowerExpN / expD);
+    const float upperEval = amp * std::exp(upperExpN / expD);
+
+    return (upperLimit - lowerLimit) * (0.5f * (lowerEval + upperEval));
+}
+
 }
 
 
