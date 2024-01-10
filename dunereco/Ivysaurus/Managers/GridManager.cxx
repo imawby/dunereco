@@ -122,6 +122,7 @@ void GridManager::Grid::AddToGrid(const TVector3 &position, const float width, c
     const float hitLowEdge = position.X() - (m_nSigmaConsidered * (width / 2.f));
     const float hitHighEdge = position.X() + (m_nSigmaConsidered * (width / 2.f));
 
+    // Link up 'low X' and 'high X' with grid's 'start' and 'end' definitions
     float hitStartEdge = hitLowEdge;
     float hitEndEdge = hitHighEdge;
     int startDriftBin = std::floor((hitStartEdge - m_driftBoundaries.front()) / driftInterval); 
@@ -135,29 +136,7 @@ void GridManager::Grid::AddToGrid(const TVector3 &position, const float width, c
         endDriftBin = std::floor((m_driftBoundaries.front() - hitEndEdge) / driftInterval);
     }
 
-    /*
-    std::cout << "-------------------------------------------" << std::endl;
-    for (int i = startDriftBin; i <= (endDriftBin+1); ++i)
-    {
-        if (i < 0)
-            continue;
-
-        if (i >= static_cast<int>(m_axisDimensions))
-            continue;
-
-        std::cout << "m_driftBoundaries.at(" << i << "): " << m_driftBoundaries.at(i) << std::endl;
-    }
-
-    std::cout << "hitLowEdge: " << hitLowEdge << std::endl;
-    std::cout << "hitHighEdge: " << hitHighEdge << std::endl;
-    std::cout << "hitStartEdge: " << hitStartEdge << std::endl;
-    std::cout << "hitEndEdge: " << hitEndEdge << std::endl;
-    std::cout << "startDriftBin: " << startDriftBin << std::endl;
-    std::cout << "endDriftBin: " << endDriftBin << std::endl;
-    
-    std::cout << "-------------------------------------------" << std::endl;
-    std::cout << "total energy: " << energy << std::endl;
-    */
+    // Loop over the drift bings, and fill grid
     for (int iDriftBin = startDriftBin; iDriftBin <= endDriftBin; ++iDriftBin)
     {
         if (iDriftBin < 0)
@@ -169,22 +148,14 @@ void GridManager::Grid::AddToGrid(const TVector3 &position, const float width, c
         const float integralStartX = (iDriftBin == startDriftBin) ? hitStartEdge : m_driftBoundaries.at(iDriftBin);
         const float integralEndX = (iDriftBin == endDriftBin) ? hitEndEdge : m_driftBoundaries.at(iDriftBin + 1);
 
-        // Integrate the Gaussian area... (atm just go for uniform)
+        // Integrate the Gaussian area...
         const float chargeFraction = IvysaurusUtils::IntegrateGaussian(integralStartX, integralEndX, position.X(), (width / 2.f), m_integralStep); 
         const float entryEnergy = energy * chargeFraction;
-      
-        /*  
-        std::cout << "/////////////////////////////////" << std::endl;
-        std::cout << "Filling between " << "(" << m_driftBoundaries.at(iDriftBin) << ", " << m_driftBoundaries.at(iDriftBin + 1) << ")" << std::endl;
-        std::cout << "with charge fraction: " << chargeFraction << std::endl;
-        std::cout << "and energy: " << entryEnergy << std::endl; 
-        std::cout << "/////////////////////////////////" << std::endl;
-        */
+
         // Now fill grid
         m_gridValues[iDriftBin][wireBin] += entryEnergy;
     }
-
-    std::cout << "-------------------------------------------" << std::endl;     
+    //////////////////////////////////////
 }
 
 /////////////////////////////////////////////////////////////
