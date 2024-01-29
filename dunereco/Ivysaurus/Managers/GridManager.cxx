@@ -31,6 +31,7 @@
 #include "dunereco/Ivysaurus/Managers/GridManager.h"
 #include "dunereco/Ivysaurus/Utils/IvysaurusUtils.h"
 #include "dunereco/AnaUtils/DUNEAnaPFParticleUtils.h"
+#include "dunereco/AnaUtils/DUNEAnaSpacePointUtils.h"
 #include "dunereco/AnaUtils/DUNEAnaHitUtils.h"
 
 
@@ -104,17 +105,24 @@ bool GridManager::Grid::IsInsideGrid(const TVector3 &position, const float width
 
 void GridManager::Grid::AddToGrid(const TVector3 &position, const float width, const float energy)
 {
+    std::cout << "WIRE" << std::endl;
+
     //////////////////////////////////////
     // Get wire bin
     const float wireInterval = std::fabs(m_wireBoundaries.at(0) - m_wireBoundaries.at(1));
-    const unsigned int wireBin = std::floor((position.Z() - m_wireBoundaries.front()) / wireInterval); 
+    int wireBin = std::floor((position.Z() - m_wireBoundaries.front()) / wireInterval); 
+
+    if (m_wireBoundaries.back() < m_wireBoundaries.front())
+        wireBin = std::floor((m_wireBoundaries.front() - position.Z()) / wireInterval);
 
     if (wireBin < 0)
         return;
 
-    if (wireBin >= m_axisDimensions)
+    if (wireBin >= static_cast<int>(m_axisDimensions))
         return;
     //////////////////////////////////////
+
+    std::cout << "DRIFT" << std::endl;
 
     //////////////////////////////////////
     // Now fill assuming hits are Gaussian...
@@ -136,6 +144,8 @@ void GridManager::Grid::AddToGrid(const TVector3 &position, const float width, c
         endDriftBin = std::floor((m_driftBoundaries.front() - hitEndEdge) / driftInterval);
     }
 
+    std::cout << "LOOP OVER DRIFT" << std::endl;
+
     // Loop over the drift bings, and fill grid
     for (int iDriftBin = startDriftBin; iDriftBin <= endDriftBin; ++iDriftBin)
     {
@@ -156,6 +166,8 @@ void GridManager::Grid::AddToGrid(const TVector3 &position, const float width, c
         m_gridValues[iDriftBin][wireBin] += entryEnergy;
     }
     //////////////////////////////////////
+
+    std::cout << "ENDING" << std::endl;
 }
 
 /////////////////////////////////////////////////////////////
@@ -194,6 +206,7 @@ GridManager::GridManager(const fhicl::ParameterSet& pset) :
     m_showerModuleLabel(pset.get<std::string>("ShowerModuleLabel")),
     m_gridSize3D(pset.get<float>("GridSize3D")),
     m_dimensions(pset.get<float>("GridDimensions")),
+    m_addChildrenToGrid(pset.get<bool>("AddChildrenToGrid")),
     m_maxGridEntry(pset.get<float>("MaxGridEntry")),
     m_nSigmaConsidered(pset.get<unsigned int>("NSigmaConsidered")),
     m_integralStep(pset.get<float>("IntegralStep")),
@@ -225,28 +238,11 @@ GridManager::Grid GridManager::ObtainViewGrid(const art::Event &evt, const art::
     TVector3 position1 = TVector3(0.f, 0.f, 0.f);
     TVector3 position2 = TVector3(0.f, 0.f, 0.f); // Along the particle direction from position1
 
+
     if (isStart)
     {
-        if (trackScore > 0.5f)
-        {
-            if (!GetStartExtremalPointsTrack(evt, pfparticle, position1, position2))
-            {
-                if (!GetStartExtremalPointsShower(evt, pfparticle, position1, position2))
-                {
-                    return Grid(TVector3(0.f, 0.f, 0.f), 0.f, 0.f, 0, m_maxGridEntry, m_nSigmaConsidered, m_integralStep, pandoraView, false);
-                }
-            }
-        }
-        else
-        {
-            if (!GetStartExtremalPointsShower(evt, pfparticle, position1, position2))
-            {
-                if (!GetStartExtremalPointsTrack(evt, pfparticle, position1, position2))
-                {
-                    return Grid(TVector3(0.f, 0.f, 0.f), 0.f, 0.f, 0, m_maxGridEntry, m_nSigmaConsidered, m_integralStep, pandoraView, false);
-                }
-            }
-        }
+        if (!GetStartExtremalPoints(evt, pfparticle, position1, position2))
+            return Grid(TVector3(0.f, 0.f, 0.f), 0.f, 0.f, 0, m_maxGridEntry, m_nSigmaConsidered, m_integralStep, pandoraView, false);
     }
     else
     {
@@ -281,6 +277,107 @@ GridManager::Grid GridManager::ObtainViewGrid(const art::Event &evt, const art::
     return Grid(projectedPosition1, driftSpan, wireSpan, m_dimensions, m_maxGridEntry, m_nSigmaConsidered, m_integralStep, pandoraView, true);
 }
 
+
+/////////////////////////////////////////////////////////////
+
+bool GridManager::GetStartExtremalPoints(const art::Event &evt, const art::Ptr<recob::PFParticle> &pfparticle, 
+    TVector3 &position1, TVector3 &position2) const
+{
+    const std::vector<art::Ptr<recob::SpacePoint>> spacepoints = dune_ana::DUNEAnaPFParticleUtils::GetSpacePoints(pfparticle, evt, m_recoModuleLabel); 
+    const art::Ptr<recob::Vertex> vertex = dune_ana::DUNEAnaPFParticleUtils::GetVertex(pfparticle, evt, m_recoModuleLabel);
+
+    int nBins = 180;
+    float angleMin = 0.f, angleMax = 2.f * M_PI;
+    float binWidth = (angleMax - angleMin) / static_cast<float>(nBins);
+
+    std::vector<std::vector<int>> spatialDist(nBins, std::vector<int>(nBins, 0));
+    std::vector<std::vector<float>> energyDist(nBins, std::vector<float>(nBins, 0.f));
+
+    // theta0YZ then theta0XZ
+    // measure from Y to Z, and Z to X? fool.
+    int highestSP = 0;
+    float highestEnergy = 0.f;
+    int bestTheta0YZBin = -1;
+    int bestTheta0XZBin = -1; 
+
+    for (const art::Ptr<recob::SpacePoint> &spacepoint : spacepoints)
+    {
+        const TVector3 vertexPos = TVector3(vertex->position().X(), vertex->position().Y(), vertex->position().Z());
+        const TVector3 spacepointPos = TVector3(spacepoint->position().X(), spacepoint->position().Y(), spacepoint->position().Z());
+        const TVector3 displacement = spacepointPos - vertexPos;
+        const float mag = sqrt((displacement.X() * displacement.X()) + (displacement.Y() * displacement.Y()) + (displacement.Z() * displacement.Z()));
+
+        if (mag > m_gridSize3D)
+            continue;
+
+        const float magXZ = sqrt((displacement.X() * displacement.X()) + (displacement.Z() * displacement.Z()));
+
+        float theta0YZ = mag < std::numeric_limits<float>::epsilon() ? 0.f : std::acos(displacement.Y() / mag);
+        float theta0XZ = magXZ < std::numeric_limits<float>::epsilon() ? 0.f : std::acos(displacement.Z() / magXZ);
+
+        // try do signed-ness
+        if (displacement.Z() < 0.f)
+            theta0YZ += M_PI;
+
+        if (displacement.X() < 0.f)
+            theta0XZ += M_PI;
+
+        const int bin0YZ = std::floor(theta0YZ / binWidth);
+        const int bin0XZ = std::floor(theta0XZ / binWidth);
+
+        const std::vector<art::Ptr<recob::Hit>> assocHits = dune_ana::DUNEAnaSpacePointUtils::GetHits(spacepoint, evt, m_recoModuleLabel);
+
+        if (assocHits.empty())
+            continue;
+
+        spatialDist[bin0YZ][bin0XZ] += 1;
+        energyDist[bin0YZ][bin0XZ] += ObtainHitEnergy(evt, assocHits.front());
+
+        if (((spatialDist[bin0YZ][bin0XZ] == highestSP) && (energyDist[bin0YZ][bin0XZ] > highestEnergy)) ||
+            (spatialDist[bin0YZ][bin0XZ] > highestSP))
+        {
+            highestSP = spatialDist[bin0YZ][bin0XZ];
+            highestEnergy = energyDist[bin0YZ][bin0XZ];
+            bestTheta0YZBin = bin0YZ;
+            bestTheta0XZBin = bin0XZ;
+        }
+    }
+
+    if ((bestTheta0YZBin < 0) || (bestTheta0XZBin < 0))
+        return false;
+
+    const float bestTheta0YZ = angleMin + ((static_cast<float>(bestTheta0YZBin) + 0.5f) * binWidth);
+    const float bestTheta0XZ = angleMin + ((static_cast<float>(bestTheta0XZBin) + 0.5f) * binWidth);
+
+    /*
+    const float y = std::cos(bestTheta0YZ);
+    const float xzMag = std::sin(bestTheta0YZ); 
+    const float x = xzMag * std::sin(bestTheta0XZ);
+    const float z = xzMag * std::cos(bestTheta0XZ);
+    */
+
+    TVector3 direction = TVector3(std::fabs(std::sin(bestTheta0YZ) * std::sin(bestTheta0XZ)), std::fabs(std::cos(bestTheta0YZ)), 
+        std::fabs(std::sin(bestTheta0YZ) * std::cos(bestTheta0XZ)));
+
+    if (bestTheta0XZ > M_PI)
+        direction.SetX(direction.X() * -1.f);
+
+    if (bestTheta0YZ > M_PI)
+        direction.SetZ(direction.Z() * -1.f);
+
+    if ((bestTheta0YZ > (M_PI / 2.f)) && (bestTheta0YZ < (M_PI * 3.f / 2.f)))
+        direction.SetY(direction.Y() * -1.f);
+
+    position1 = TVector3(vertex->position().X(), vertex->position().Y(), vertex->position().Z());
+    const float diagonalLength = sqrt(2.0 * (m_gridSize3D * m_gridSize3D));
+    position2 = position1 + (direction * diagonalLength);
+
+    return true;
+}
+
+
+
+
 /////////////////////////////////////////////////////////////
 
 bool GridManager::GetStartExtremalPointsTrack(const art::Event &evt, const art::Ptr<recob::PFParticle> &pfparticle, 
@@ -309,8 +406,20 @@ bool GridManager::GetStartExtremalPointsShower(const art::Event &evt, const art:
 
     const art::Ptr<recob::Shower> shower = dune_ana::DUNEAnaPFParticleUtils::GetShower(pfparticle, evt, m_recoModuleLabel, m_showerModuleLabel);
 
-    const TVector3 direction = TVector3(shower->Direction().X(), shower->Direction().Y(), shower->Direction().Z());
-    position1 = TVector3(shower->ShowerStart().X(), shower->ShowerStart().Y(), shower->ShowerStart().Z());
+    // Get the track stub
+    art::Handle<std::vector<recob::Shower>> showerHandle;
+    evt.getByLabel(m_showerModuleLabel, showerHandle);
+
+    art::FindManyP<recob::Track> initialTrackAssoc(showerHandle, evt, m_showerModuleLabel);
+    std::vector<art::Ptr<recob::Track>> initialTrackStubVector = initialTrackAssoc.at(shower.key());
+
+    if (initialTrackStubVector.size() != 1)
+        return false;
+
+    art::Ptr<recob::Track> initialTrackStub = initialTrackStubVector.at(0);
+
+    const TVector3 direction = TVector3(initialTrackStub->StartDirection().X(), initialTrackStub->StartDirection().Y(), initialTrackStub->StartDirection().Z());
+    position1 = TVector3(initialTrackStub->Start().X(), initialTrackStub->Start().Y(), initialTrackStub->Start().Z());
     const float diagonalLength = sqrt(2.0 * (m_gridSize3D * m_gridSize3D));
     position2 = position1 + (direction * diagonalLength);
 
@@ -366,10 +475,33 @@ bool GridManager::GetEndExtremalPointsShower(const art::Event &evt, const art::P
 void GridManager::FillViewGrid(const art::Event &evt, const art::Ptr<recob::PFParticle> &pfparticle, 
     GridManager::Grid &grid) const
 {
-    // Get 2D hits for Pandora view..
-    const std::vector<art::Ptr<recob::Hit>> pfpHits = dune_ana::DUNEAnaPFParticleUtils::GetHits(pfparticle, evt, m_recoModuleLabel);
-
     IvysaurusUtils::PandoraView pandoraView = grid.GetPandoraView();
+
+    // Get all 2D hits
+    std::vector<art::Ptr<recob::Hit>> pfpHits = dune_ana::DUNEAnaPFParticleUtils::GetHits(pfparticle, evt, m_recoModuleLabel);
+
+    // Add in children hits...
+    if (m_addChildrenToGrid)
+    {
+        const std::vector<art::Ptr<recob::PFParticle>> pfpChildren = dune_ana::DUNEAnaPFParticleUtils::GetChildParticles(pfparticle, evt, m_recoModuleLabel);
+
+        for (const art::Ptr<recob::PFParticle> &childPFP : pfpChildren)
+        {
+            const art::Ptr<recob::Vertex> &childVertex = dune_ana::DUNEAnaPFParticleUtils::GetVertex(pfparticle, evt, m_recoModuleLabel);
+            const TVector3 vertex3D = TVector3(childVertex->position().X(), childVertex->position().Y(), childVertex->position().Z());
+            const TVector3 projectedVertex = IvysaurusUtils::ProjectIntoPandoraView(vertex3D, pandoraView);
+
+            if (!grid.IsInsideGrid(projectedVertex, 0.f))
+                continue;
+
+            const std::vector<art::Ptr<recob::Hit>> &childHits = dune_ana::DUNEAnaPFParticleUtils::GetHits(childPFP, evt, m_recoModuleLabel); 
+            pfpHits.insert(pfpHits.begin(), childHits.begin(), childHits.end());
+        }
+    }
+
+    std::cout << "In fill grid, pfpHits.size(): " << pfpHits.size() << std::endl;
+
+    int count = 0;
 
     for (const art::Ptr<recob::Hit> hit : pfpHits)
     {
@@ -396,6 +528,9 @@ void GridManager::FillViewGrid(const art::Event &evt, const art::Ptr<recob::PFPa
         // Add its energy to the grid
         const float energy = ObtainHitEnergy(evt, hit);
         grid.AddToGrid(pandoraHitPosition, hitWidth, energy);
+
+        ++count;
+
     }
 
     //grid.NormaliseGrid();

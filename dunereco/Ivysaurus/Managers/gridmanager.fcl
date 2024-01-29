@@ -10,6 +10,7 @@ grid_manager:
   ShowerModuleLabel:  "pandoraShower"
   GridSize3D:          25.0
   GridDimensions:      24
+  AddChildrenToGrid:   false
   MaxGridEntry:        0.01
   NSigmaConsidered:    3
   IntegralStep:        0.1
