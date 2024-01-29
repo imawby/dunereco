@@ -76,6 +76,9 @@ class GridManager
   private:
     float ObtainHitEnergy(const art::Event &evt, const art::Ptr<recob::Hit> &hit) const;
 
+    bool GetStartExtremalPoints(const art::Event &evt, const art::Ptr<recob::PFParticle> &pfparticle, 
+        TVector3 &position1, TVector3 &position2) const;
+
     bool GetStartExtremalPointsTrack(const art::Event &evt, const art::Ptr<recob::PFParticle> &pfparticle, 
         TVector3 &position1, TVector3 &position2) const;
 
@@ -95,6 +98,7 @@ class GridManager
 
     float m_gridSize3D;
     unsigned int m_dimensions;
+    bool m_addChildrenToGrid;
     float m_maxGridEntry;
     unsigned int m_nSigmaConsidered;                                                                                                                                                                                           
     float m_integralStep;
