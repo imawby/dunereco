@@ -126,9 +126,9 @@ double CompletenessFromTrueParticleID(detinfo::DetectorClocksData const& clockDa
         if (matchedID == trackID) nMatchesInSelHits++;
     }
 
-    for (art::Ptr<recob::Hit> hit : selectedHits)
+    for (art::Ptr<recob::Hit> hit : eventHits)
     {
-        const int matchedID = TruthMatchUtils::TrueParticleID(clockData, hit, 1);;
+        const int matchedID = TruthMatchUtils::TrueParticleID(clockData, hit, 1);
         if (matchedID == trackID) nMatchesInAllHits++;
     }
 
@@ -151,8 +151,6 @@ double HitPurityFromTrueParticleID(detinfo::DetectorClocksData const& clockData,
     }
 
     const double purity = (selectedHits.size() > 0) ? static_cast<double>(nMatchesInSelHits) / static_cast<double>(selectedHits.size()) : 0.0;
-
-    std::cout << "purity: " << purity << std::endl;
 
     return purity;
 }
