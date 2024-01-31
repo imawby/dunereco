@@ -82,6 +82,12 @@ private:
   std::vector<std::vector<float>> m_endGridValuesU;
   std::vector<std::vector<float>> m_endGridValuesV;
   std::vector<std::vector<float>> m_endGridValuesW;
+  std::vector<std::vector<float>> m_startGridValuesU_disp;
+  std::vector<std::vector<float>> m_startGridValuesV_disp;
+  std::vector<std::vector<float>> m_startGridValuesW_disp;
+  std::vector<std::vector<float>> m_endGridValuesU_disp;
+  std::vector<std::vector<float>> m_endGridValuesV_disp;
+  std::vector<std::vector<float>> m_endGridValuesW_disp;
 
   // TrackVars
   int m_trackVarsSuccessful;
@@ -257,8 +263,6 @@ void IvysaurusTrainingFiles::analyze(const art::Event &evt)
         if ((absPDG != 13) && (absPDG != 2212) && (absPDG != 211) && (absPDG != 11) & (absPDG != 22))
             continue;
 
-        std::cout << "BBBBBBBB" << std::endl;
-
         ////////////////////////////////////////////                                                                                                                                                                                    
         // Now, get the track score... 
         ////////////////////////////////////////////  
@@ -295,7 +299,7 @@ void IvysaurusTrainingFiles::analyze(const art::Event &evt)
         if ((m_completeness < m_completenessThreshold) || (m_purity < m_purityThreshold) || (spacepoints.size() < m_nSpacepointThreshold))
             continue;
 
-        ////////////////////////////////////////////                                                                                                                                                                                    
+        ////////////////////////////////////////////
         // Now, into 2D
         ////////////////////////////////////////////  
 
@@ -349,8 +353,14 @@ void IvysaurusTrainingFiles::analyze(const art::Event &evt)
             ////////////////////////////////////////////
             // Then fill grid vectors...
             ////////////////////////////////////////////
+            // CaloGrid
             m_gridManager.FillViewGrid(evt, pfparticle, startGrid);
             m_gridManager.FillViewGrid(evt, pfparticle, endGrid);
+            // DisplacementGrid
+            const art::Ptr<recob::Vertex> nuVertex3D = dune_ana::DUNEAnaPFParticleUtils::GetVertex(nuPFP, evt, m_recoModuleLabel);
+            const TVector3 nuVertex3D_tv = TVector3(nuVertex3D->position().X(), nuVertex3D->position().Y(), nuVertex3D->position().Z());
+            GridManager::Grid startGrid_disp = m_gridManager.ObtainViewDisplacementGrid(evt, nuVertex3D_tv, startGrid);
+            GridManager::Grid endGrid_disp = m_gridManager.ObtainViewDisplacementGrid(evt, nuVertex3D_tv, endGrid);
 
             std::vector<float> &startDriftBoundaries = pandoraView == IvysaurusUtils::PandoraView::TPC_VIEW_U ? m_startDriftBoundariesU :
                 pandoraView == IvysaurusUtils::PandoraView::TPC_VIEW_V ? m_startDriftBoundariesV : m_startDriftBoundariesW;
@@ -370,12 +380,20 @@ void IvysaurusTrainingFiles::analyze(const art::Event &evt)
             std::vector<std::vector<float>> &endGridValues = pandoraView == IvysaurusUtils::PandoraView::TPC_VIEW_U ? m_endGridValuesU : 
                 pandoraView == IvysaurusUtils::PandoraView::TPC_VIEW_V ? m_endGridValuesV : m_endGridValuesW;
 
+            std::vector<std::vector<float>> &startGridValues_disp = pandoraView == IvysaurusUtils::PandoraView::TPC_VIEW_U ? m_startGridValuesU_disp : 
+                pandoraView == IvysaurusUtils::PandoraView::TPC_VIEW_V ? m_startGridValuesV_disp : m_startGridValuesW_disp;
+
+            std::vector<std::vector<float>> &endGridValues_disp = pandoraView == IvysaurusUtils::PandoraView::TPC_VIEW_U ? m_endGridValuesU_disp : 
+                pandoraView == IvysaurusUtils::PandoraView::TPC_VIEW_V ? m_endGridValuesV_disp : m_endGridValuesW_disp;
+
             startDriftBoundaries = startGrid.GetDriftBoundaries();
             endDriftBoundaries = endGrid.GetDriftBoundaries();
             startWireBoundaries = startGrid.GetWireBoundaries();
             endWireBoundaries = endGrid.GetWireBoundaries();
             startGridValues = startGrid.GetGridValues();
             endGridValues = endGrid.GetGridValues();
+            startGridValues_disp = startGrid_disp.GetGridValues();
+            endGridValues_disp = endGrid_disp.GetGridValues();
         }
 
         if (nInitialisedGrids != 3)
@@ -478,6 +496,12 @@ void IvysaurusTrainingFiles::Reset()
   m_endGridValuesU.clear();
   m_endGridValuesV.clear();
   m_endGridValuesW.clear();
+  m_startGridValuesU_disp.clear();
+  m_startGridValuesV_disp.clear();
+  m_startGridValuesW_disp.clear();
+  m_endGridValuesU_disp.clear();
+  m_endGridValuesV_disp.clear();
+  m_endGridValuesW_disp.clear();
 
   m_trackVarsSuccessful = 0;
   m_nTrackChildren = defaultFloat;
@@ -538,6 +562,7 @@ void IvysaurusTrainingFiles::beginJob()
     m_tree->Branch("ProjectionsU", &m_projectionsU);
     m_tree->Branch("ProjectionsV", &m_projectionsV);
     m_tree->Branch("ProjectionsW", &m_projectionsW);
+
     m_tree->Branch("StartDriftBoundariesU", &m_startDriftBoundariesU);
     m_tree->Branch("StartDriftBoundariesV", &m_startDriftBoundariesV);
     m_tree->Branch("StartDriftBoundariesW", &m_startDriftBoundariesW);
@@ -556,6 +581,12 @@ void IvysaurusTrainingFiles::beginJob()
     m_tree->Branch("EndGridU", &m_endGridValuesU);
     m_tree->Branch("EndGridV", &m_endGridValuesV);
     m_tree->Branch("EndGridW", &m_endGridValuesW);
+    m_tree->Branch("StartGridUDisp", &m_startGridValuesU_disp);
+    m_tree->Branch("StartGridVDisp", &m_startGridValuesV_disp);
+    m_tree->Branch("StartGridWDisp", &m_startGridValuesW_disp);
+    m_tree->Branch("EndGridUDisp", &m_endGridValuesU_disp);
+    m_tree->Branch("EndGridVDisp", &m_endGridValuesV_disp);
+    m_tree->Branch("EndGridWDisp", &m_endGridValuesW_disp);
 
     m_tree->Branch("TrackVarsSuccessful", &m_trackVarsSuccessful);
     m_tree->Branch("NTrackChildren", &m_nTrackChildren);
