@@ -49,7 +49,6 @@ GridManager::Grid::Grid(const TVector3 origin, const float driftSpan, const floa
         m_isInitialised(isInitialised)
 {
     m_gridValues = std::vector<std::vector<float>>(m_axisDimensions, std::vector<float>(m_axisDimensions, 0.0));
-    m_countValues = std::vector<std::vector<float>>(m_axisDimensions, std::vector<float>(m_axisDimensions, 0.0));
 
     const float driftInterval = driftSpan / m_axisDimensions;
 
@@ -88,13 +87,16 @@ bool GridManager::Grid::IsInsideGrid(const TVector3 &position, const float width
     // Drift axis
     const float gridMinDriftCoord(std::min(m_driftBoundaries.front(), m_driftBoundaries.back()));
     const float gridMaxDriftCoord(std::max(m_driftBoundaries.front(), m_driftBoundaries.back()));
-    const float hitMinDriftCoord = position.X() - (m_nSigmaConsidered * (width / 2.0));
-    const float hitMaxDriftCoord = position.X() + (m_nSigmaConsidered * (width / 2.0));
+    const float hitMinDriftCoord = (width < std::numeric_limits<float>::epsilon()) ? position.X() : position.X() - (m_nSigmaConsidered * (width / 2.0));
+    const float hitMaxDriftCoord = (width < std::numeric_limits<float>::epsilon()) ? position.X() : position.X() + (m_nSigmaConsidered * (width / 2.0));
 
-    if ((hitMinDriftCoord < gridMinDriftCoord) && (hitMaxDriftCoord < gridMinDriftCoord))
+    if (std::fabs(hitMaxDriftCoord - gridMinDriftCoord) < std::numeric_limits<float>::epsilon())
         return false;
 
-    if ((hitMinDriftCoord > gridMaxDriftCoord) && (hitMaxDriftCoord > gridMaxDriftCoord))
+    if (std::fabs(hitMinDriftCoord - gridMaxDriftCoord) < std::numeric_limits<float>::epsilon())
+        return false;
+
+    if ((hitMaxDriftCoord < gridMinDriftCoord) || (hitMinDriftCoord > gridMaxDriftCoord))
         return false;
     //////////////////////////////////////
 
@@ -105,8 +107,6 @@ bool GridManager::Grid::IsInsideGrid(const TVector3 &position, const float width
 
 void GridManager::Grid::AddToGrid(const TVector3 &position, const float width, const float energy)
 {
-    std::cout << "WIRE" << std::endl;
-
     //////////////////////////////////////
     // Get wire bin
     const float wireInterval = std::fabs(m_wireBoundaries.at(0) - m_wireBoundaries.at(1));
@@ -121,8 +121,6 @@ void GridManager::Grid::AddToGrid(const TVector3 &position, const float width, c
     if (wireBin >= static_cast<int>(m_axisDimensions))
         return;
     //////////////////////////////////////
-
-    std::cout << "DRIFT" << std::endl;
 
     //////////////////////////////////////
     // Now fill assuming hits are Gaussian...
@@ -144,8 +142,6 @@ void GridManager::Grid::AddToGrid(const TVector3 &position, const float width, c
         endDriftBin = std::floor((m_driftBoundaries.front() - hitEndEdge) / driftInterval);
     }
 
-    std::cout << "LOOP OVER DRIFT" << std::endl;
-
     // Loop over the drift bings, and fill grid
     for (int iDriftBin = startDriftBin; iDriftBin <= endDriftBin; ++iDriftBin)
     {
@@ -166,8 +162,6 @@ void GridManager::Grid::AddToGrid(const TVector3 &position, const float width, c
         m_gridValues[iDriftBin][wireBin] += entryEnergy;
     }
     //////////////////////////////////////
-
-    std::cout << "ENDING" << std::endl;
 }
 
 /////////////////////////////////////////////////////////////
@@ -238,7 +232,6 @@ GridManager::Grid GridManager::ObtainViewGrid(const art::Event &evt, const art::
     TVector3 position1 = TVector3(0.f, 0.f, 0.f);
     TVector3 position2 = TVector3(0.f, 0.f, 0.f); // Along the particle direction from position1
 
-
     if (isStart)
     {
         if (!GetStartExtremalPoints(evt, pfparticle, position1, position2))
@@ -274,9 +267,12 @@ GridManager::Grid GridManager::ObtainViewGrid(const art::Event &evt, const art::
     const float driftSpan = projectedPosition2.X() - projectedPosition1.X();
     const float wireSpan = projectedPosition2.Z() - projectedPosition1.Z();
 
-    return Grid(projectedPosition1, driftSpan, wireSpan, m_dimensions, m_maxGridEntry, m_nSigmaConsidered, m_integralStep, pandoraView, true);
-}
+    Grid grid = Grid(projectedPosition1, driftSpan, wireSpan, m_dimensions, m_maxGridEntry, m_nSigmaConsidered, m_integralStep, pandoraView, true);
 
+    FindHitsInGrid(evt, pfparticle, grid);
+
+    return grid;
+}
 
 /////////////////////////////////////////////////////////////
 
@@ -375,9 +371,6 @@ bool GridManager::GetStartExtremalPoints(const art::Event &evt, const art::Ptr<r
     return true;
 }
 
-
-
-
 /////////////////////////////////////////////////////////////
 
 bool GridManager::GetStartExtremalPointsTrack(const art::Event &evt, const art::Ptr<recob::PFParticle> &pfparticle, 
@@ -472,8 +465,8 @@ bool GridManager::GetEndExtremalPointsShower(const art::Event &evt, const art::P
 
 /////////////////////////////////////////////////////////////
 
-void GridManager::FillViewGrid(const art::Event &evt, const art::Ptr<recob::PFParticle> &pfparticle, 
-    GridManager::Grid &grid) const
+void GridManager::FindHitsInGrid(const art::Event &evt, const art::Ptr<recob::PFParticle> &pfparticle, 
+    Grid &grid) const
 {
     IvysaurusUtils::PandoraView pandoraView = grid.GetPandoraView();
 
@@ -487,22 +480,19 @@ void GridManager::FillViewGrid(const art::Event &evt, const art::Ptr<recob::PFPa
 
         for (const art::Ptr<recob::PFParticle> &childPFP : pfpChildren)
         {
-            const art::Ptr<recob::Vertex> &childVertex = dune_ana::DUNEAnaPFParticleUtils::GetVertex(pfparticle, evt, m_recoModuleLabel);
+            const art::Ptr<recob::Vertex> &childVertex = dune_ana::DUNEAnaPFParticleUtils::GetVertex(childPFP, evt, m_recoModuleLabel);
             const TVector3 vertex3D = TVector3(childVertex->position().X(), childVertex->position().Y(), childVertex->position().Z());
             const TVector3 projectedVertex = IvysaurusUtils::ProjectIntoPandoraView(vertex3D, pandoraView);
 
             if (!grid.IsInsideGrid(projectedVertex, 0.f))
                 continue;
 
-            const std::vector<art::Ptr<recob::Hit>> &childHits = dune_ana::DUNEAnaPFParticleUtils::GetHits(childPFP, evt, m_recoModuleLabel); 
+            const std::vector<art::Ptr<recob::Hit>> &childHits = dune_ana::DUNEAnaPFParticleUtils::GetHits(childPFP, evt, m_recoModuleLabel);
             pfpHits.insert(pfpHits.begin(), childHits.begin(), childHits.end());
         }
     }
 
-    std::cout << "In fill grid, pfpHits.size(): " << pfpHits.size() << std::endl;
-
-    int count = 0;
-
+    // Add hits to hit list
     for (const art::Ptr<recob::Hit> hit : pfpHits)
     {
         // Make sure 2D hit has an associated space point
@@ -525,15 +515,40 @@ void GridManager::FillViewGrid(const art::Event &evt, const art::Ptr<recob::PFPa
         if (!grid.IsInsideGrid(pandoraHitPosition, hitWidth))
             continue;
 
+        grid.AddToGridHitList(hit);
+    }
+}
+
+/////////////////////////////////////////////////////////////
+
+void GridManager::FillViewGrid(const art::Event &evt, const art::Ptr<recob::PFParticle> &pfparticle, 
+    GridManager::Grid &grid) const
+{
+    IvysaurusUtils::PandoraView pandoraView = grid.GetPandoraView();
+
+    // Get hits in grid
+    std::vector<art::Ptr<recob::Hit>> gridHitList = grid.GetGridHitList();
+
+    // Fill grid
+    for (const art::Ptr<recob::Hit> hit : gridHitList)
+    {
+        // Get 2D hit position and width
+        float hitWidth = 0.f;
+        TVector3 pandoraHitPosition = TVector3(0.f, 0.f, 0.f);
+        IvysaurusUtils::ObtainPandoraHitPositionAndWidth(evt, hit, pandoraView, pandoraHitPosition, hitWidth);
+
+        // Check hit is inside grid
+        if (!grid.IsInsideGrid(pandoraHitPosition, hitWidth))
+            continue;
+
+        std::cout << "FillViewGrid" << std::endl;
+
         // Add its energy to the grid
         const float energy = ObtainHitEnergy(evt, hit);
         grid.AddToGrid(pandoraHitPosition, hitWidth, energy);
-
-        ++count;
-
     }
 
-    //grid.NormaliseGrid();
+    grid.NormaliseGrid();
 }
 
 /////////////////////////////////////////////////////////////
@@ -549,5 +564,83 @@ float GridManager::ObtainHitEnergy(const art::Event &evt, const art::Ptr<recob::
 
     return hitEnergy;
 }
+
+/////////////////////////////////////////////////////////////
+
+GridManager::Grid GridManager::ObtainViewDisplacementGrid(const art::Event &evt, const TVector3 &nuVertex3D, const GridManager::Grid &caloGrid) const
+{
+    // Now fill the displacement grid
+    Grid dispGrid = caloGrid;
+    dispGrid.ResetGridEntries();
+
+    IvysaurusUtils::PandoraView pandoraView = dispGrid.GetPandoraView();
+    const TVector3 nuVertex2D = IvysaurusUtils::ProjectIntoPandoraView(nuVertex3D, pandoraView);
+    const std::vector<float> &driftBoundaries = dispGrid.GetDriftBoundaries();
+    const std::vector<float> &wireBoundaries = dispGrid.GetWireBoundaries();
+    const float driftIntervalSigned = driftBoundaries.at(1) - driftBoundaries.at(0);
+    const float wireIntervalSigned = wireBoundaries.at(1) - wireBoundaries.at(0);
+
+    // Get hits in grid
+    std::vector<art::Ptr<recob::Hit>> gridHitList = dispGrid.GetGridHitList();
+
+    // Fill grid
+    for (const art::Ptr<recob::Hit> hit : gridHitList)
+    {
+        // Get 2D hit position and width
+        float hitWidth = 0.f;
+        TVector3 pandoraHitPosition = TVector3(0.f, 0.f, 0.f);
+        IvysaurusUtils::ObtainPandoraHitPositionAndWidth(evt, hit, pandoraView, pandoraHitPosition, hitWidth);
+
+        // Check hit is inside grid
+        if (!dispGrid.IsInsideGrid(pandoraHitPosition, 0.f))
+            continue;
+
+        std::cout << "ObtainViewDisplacementGrid" << std::endl;
+
+        // Get wire bin
+        int wireBin = std::floor((pandoraHitPosition.Z() - wireBoundaries.front()) / std::fabs(wireIntervalSigned));
+
+        if (wireBoundaries.back() < wireBoundaries.front())
+            wireBin = std::floor((wireBoundaries.front() - pandoraHitPosition.Z()) / std::fabs(wireIntervalSigned));
+
+        // floating-point precision
+        if ((wireBin < 0) || (wireBin >= static_cast<int>(m_dimensions)))
+            continue;
+
+        // Get drift bin
+        int driftBin = std::floor((pandoraHitPosition.X() - driftBoundaries.front()) / std::fabs(driftIntervalSigned));
+
+        if (driftBoundaries.back() < driftBoundaries.front())
+            driftBin = std::floor((driftBoundaries.front() - pandoraHitPosition.X()) / std::fabs(driftIntervalSigned));
+
+        // floating-point precision
+        if ((driftBin < 0) || (driftBin >= static_cast<int>(m_dimensions)))
+            continue;
+
+        std::cout << "wireBin: " << wireBin << std::endl;
+        std::cout << "driftBin: " << driftBin << std::endl;
+
+        // Has that entry been set?
+        if (dispGrid.GetGridEntry(driftBin, wireBin) > std::numeric_limits<float>::epsilon())
+            continue;
+
+        // Drift Coordinate
+        const float driftCoord = driftBoundaries.at(0) + ((driftBin + 0.5) * driftIntervalSigned); 
+
+        // WireCoordinate
+        const float wireCoord = wireBoundaries.at(0) + ((wireBin + 0.5) * wireIntervalSigned); 
+
+        // NuVertex Separation
+        const float deltaX = driftCoord - nuVertex2D.X();
+        const float deltaZ = wireCoord - nuVertex2D.Z();
+        const float nuSeparation = sqrt((deltaX * deltaX) + (deltaZ * deltaZ));
+
+        dispGrid.SetGridEntry(driftBin, wireBin, nuSeparation);
+    }
+
+    return dispGrid;
+}
+
+/////////////////////////////////////////////////////////////
 
 }

@@ -38,8 +38,12 @@ class GridManager
       unsigned int GetAxisDimensions() const;
       std::vector<float> GetDriftBoundaries() const;
       std::vector<float> GetWireBoundaries() const;
+      void AddToGridHitList(const art::Ptr<recob::Hit> &hitToAdd);
+      std::vector<art::Ptr<recob::Hit>> GetGridHitList() const;
+      float GetGridEntry(const unsigned int driftIndex, const unsigned int wireIndex) const;
+      void SetGridEntry(const unsigned int driftIndex, const unsigned int wireIndex, const float value);
+      void ResetGridEntries();
       std::vector<std::vector<float>> GetGridValues() const;
-      std::vector<std::vector<float>> GetCountValues() const;
       IvysaurusUtils::PandoraView GetPandoraView() const;
       bool IsInitialised() const;
       bool IsNormalised() const;
@@ -50,12 +54,12 @@ class GridManager
     private:
       unsigned int m_axisDimensions; // number of bins on each axis
       float m_maxGridEntry;
-      unsigned int m_nSigmaConsidered;                                                                                                                                                                                                                 
+      unsigned int m_nSigmaConsidered;
       float m_integralStep; 
       std::vector<float> m_driftBoundaries;
       std::vector<float> m_wireBoundaries;
+      std::vector<art::Ptr<recob::Hit>> m_gridHitList;
       std::vector<std::vector<float>> m_gridValues; // driftBin : [wireBins]
-      std::vector<std::vector<float>> m_countValues; // driftBin : [wireBins]
       IvysaurusUtils::PandoraView m_pandoraView;
       bool m_isInitialised;
       bool m_isAveraged;
@@ -73,9 +77,10 @@ class GridManager
     void FillViewGrid(const art::Event &evt, const art::Ptr<recob::PFParticle> &pfparticle, 
         GridManager::Grid &grid) const;
 
-  private:
-    float ObtainHitEnergy(const art::Event &evt, const art::Ptr<recob::Hit> &hit) const;
+    // Obtain displacement grid
+    Grid ObtainViewDisplacementGrid(const art::Event &evt, const TVector3 &nuVertex3D, const GridManager::Grid &caloGrid) const;
 
+  private:
     bool GetStartExtremalPoints(const art::Event &evt, const art::Ptr<recob::PFParticle> &pfparticle, 
         TVector3 &position1, TVector3 &position2) const;
 
@@ -90,6 +95,11 @@ class GridManager
 
     bool GetEndExtremalPointsShower(const art::Event &evt, const art::Ptr<recob::PFParticle> &pfparticle, 
         TVector3 &position1, TVector3 &position2) const;
+
+    void FindHitsInGrid(const art::Event &evt, const art::Ptr<recob::PFParticle> &pfparticle, 
+        Grid &grid) const;
+
+    float ObtainHitEnergy(const art::Event &evt, const art::Ptr<recob::Hit> &hit) const;
 
     std::string m_hitModuleLabel;
     std::string m_recoModuleLabel;
@@ -129,16 +139,47 @@ inline std::vector<float> GridManager::Grid::GetWireBoundaries() const
 
 /////////////////////////////////////////////////////////////
 
-inline std::vector<std::vector<float>> GridManager::Grid::GetGridValues() const 
+inline void GridManager::Grid::AddToGridHitList(const art::Ptr<recob::Hit> &hitToAdd) 
 { 
-    return m_gridValues; 
+    m_gridHitList.push_back(hitToAdd);
 }
 
 /////////////////////////////////////////////////////////////
 
-inline std::vector<std::vector<float>> GridManager::Grid::GetCountValues() const 
+ inline std::vector<art::Ptr<recob::Hit>> GridManager::Grid::GetGridHitList() const 
 { 
-    return m_countValues; 
+    return m_gridHitList;
+}
+
+/////////////////////////////////////////////////////////////
+
+inline float GridManager::Grid::GetGridEntry(const unsigned int driftIndex, 
+    const unsigned int wireIndex) const 
+{ 
+    return m_gridValues[driftIndex][wireIndex]; 
+}
+
+/////////////////////////////////////////////////////////////
+
+inline void GridManager::Grid::SetGridEntry(const unsigned int driftIndex, const unsigned int wireIndex, 
+    const float value)
+{ 
+    m_gridValues[driftIndex][wireIndex] = value;
+}
+
+/////////////////////////////////////////////////////////////
+
+inline void GridManager::Grid::ResetGridEntries()
+{ 
+    m_gridValues = std::vector<std::vector<float>>(m_axisDimensions, std::vector<float>(m_axisDimensions, 0.0));
+    m_isNormalised = false;
+}
+
+/////////////////////////////////////////////////////////////
+
+inline std::vector<std::vector<float>> GridManager::Grid::GetGridValues() const 
+{ 
+    return m_gridValues; 
 }
 
 /////////////////////////////////////////////////////////////
