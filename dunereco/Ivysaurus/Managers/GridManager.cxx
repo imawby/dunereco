@@ -308,8 +308,13 @@ bool GridManager::GetStartExtremalPoints(const art::Event &evt, const art::Ptr<r
 
         const float magXZ = sqrt((displacement.X() * displacement.X()) + (displacement.Z() * displacement.Z()));
 
-        float theta0YZ = mag < std::numeric_limits<float>::epsilon() ? 0.f : std::acos(displacement.Y() / mag);
-        float theta0XZ = magXZ < std::numeric_limits<float>::epsilon() ? 0.f : std::acos(displacement.Z() / magXZ);
+        float theta0YZ = (mag < std::numeric_limits<float>::epsilon()) ? 0.f : 
+            (std::fabs(std::fabs(displacement.Y() / mag) - 1.f) < std::numeric_limits<float>::epsilon()) ? 0.f : 
+            std::acos(displacement.Y() / mag);
+
+        float theta0XZ = (magXZ < std::numeric_limits<float>::epsilon()) ? 0.f : 
+            (std::fabs(std::fabs(displacement.Z() / magXZ) - 1.f) < std::numeric_limits<float>::epsilon()) ? 0.f :
+            std::acos(displacement.Z() / magXZ);
 
         // try do signed-ness
         if (displacement.Z() < 0.f)
@@ -541,8 +546,6 @@ void GridManager::FillViewGrid(const art::Event &evt, const art::Ptr<recob::PFPa
         if (!grid.IsInsideGrid(pandoraHitPosition, hitWidth))
             continue;
 
-        std::cout << "FillViewGrid" << std::endl;
-
         // Add its energy to the grid
         const float energy = ObtainHitEnergy(evt, hit);
         grid.AddToGrid(pandoraHitPosition, hitWidth, energy);
@@ -595,8 +598,6 @@ GridManager::Grid GridManager::ObtainViewDisplacementGrid(const art::Event &evt,
         if (!dispGrid.IsInsideGrid(pandoraHitPosition, 0.f))
             continue;
 
-        std::cout << "ObtainViewDisplacementGrid" << std::endl;
-
         // Get wire bin
         int wireBin = std::floor((pandoraHitPosition.Z() - wireBoundaries.front()) / std::fabs(wireIntervalSigned));
 
@@ -616,9 +617,6 @@ GridManager::Grid GridManager::ObtainViewDisplacementGrid(const art::Event &evt,
         // floating-point precision
         if ((driftBin < 0) || (driftBin >= static_cast<int>(m_dimensions)))
             continue;
-
-        std::cout << "wireBin: " << wireBin << std::endl;
-        std::cout << "driftBin: " << driftBin << std::endl;
 
         // Has that entry been set?
         if (dispGrid.GetGridEntry(driftBin, wireBin) > std::numeric_limits<float>::epsilon())
