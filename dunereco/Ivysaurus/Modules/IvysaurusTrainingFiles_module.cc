@@ -198,6 +198,8 @@ IvysaurusTrainingFiles::~IvysaurusTrainingFiles()
 
 void IvysaurusTrainingFiles::analyze(const art::Event &evt)
 {
+    std::cout << "BEGIN" << std::endl;
+
     const std::vector<art::Ptr<recob::PFParticle>> pfparticles = dune_ana::DUNEAnaEventUtils::GetPFParticles(evt, m_recoModuleLabel);
 
     // Get the neutrino PFP
@@ -356,6 +358,7 @@ void IvysaurusTrainingFiles::analyze(const art::Event &evt)
             // CaloGrid
             m_gridManager.FillViewGrid(evt, pfparticle, startGrid);
             m_gridManager.FillViewGrid(evt, pfparticle, endGrid);
+
             // DisplacementGrid
             const art::Ptr<recob::Vertex> nuVertex3D = dune_ana::DUNEAnaPFParticleUtils::GetVertex(nuPFP, evt, m_recoModuleLabel);
             const TVector3 nuVertex3D_tv = TVector3(nuVertex3D->position().X(), nuVertex3D->position().Y(), nuVertex3D->position().Z());
@@ -453,6 +456,7 @@ void IvysaurusTrainingFiles::analyze(const art::Event &evt)
 
         m_tree->Fill();
     }
+    std::cout << "DONE" << std::endl;
 }
 
 //------------------------------------------------------------------------------------------------------------------------------------------
