@@ -30,6 +30,7 @@
 
 #include "dunereco/Ivysaurus/Managers/GridManager.h"
 #include "dunereco/Ivysaurus/Utils/IvysaurusUtils.h"
+#include "dunereco/AnaUtils/DUNEAnaEventUtils.h"
 #include "dunereco/AnaUtils/DUNEAnaPFParticleUtils.h"
 #include "dunereco/AnaUtils/DUNEAnaSpacePointUtils.h"
 #include "dunereco/AnaUtils/DUNEAnaHitUtils.h"
@@ -220,13 +221,7 @@ GridManager::~GridManager()
 GridManager::Grid GridManager::ObtainViewGrid(const art::Event &evt, const art::Ptr<recob::PFParticle> &pfparticle, 
     const IvysaurusUtils::PandoraView pandoraView, const bool isStart) const
 {
-    const art::Ptr<larpandoraobj::PFParticleMetadata> &metadata = dune_ana::DUNEAnaPFParticleUtils::GetMetadata(pfparticle, evt, m_recoModuleLabel);
-    const auto metaMap = metadata->GetPropertiesMap();
-
-    if (metaMap.find("TrackScore") == metaMap.end())
-        return Grid(TVector3(0.f, 0.f, 0.f), 0.f, 0.f, 0, m_maxGridEntry, m_nSigmaConsidered, m_integralStep, pandoraView, false);
-
-    const float trackScore = metaMap.at("TrackScore");
+    const float trackScore = (pfparticle->PdgCode() == 13) ? 1.0 : 0.0;
 
     // Find the extremal diagonal.. 
     TVector3 position1 = TVector3(0.f, 0.f, 0.f);
@@ -279,8 +274,27 @@ GridManager::Grid GridManager::ObtainViewGrid(const art::Event &evt, const art::
 bool GridManager::GetStartExtremalPoints(const art::Event &evt, const art::Ptr<recob::PFParticle> &pfparticle, 
     TVector3 &position1, TVector3 &position2) const
 {
+    ////////////////////
+    // Get the neutrino vertex
+    art::Ptr<recob::PFParticle> nuPFP;
+
+    try
+    {
+        nuPFP = dune_ana::DUNEAnaEventUtils::GetNeutrino(evt, m_recoModuleLabel);
+    }
+    catch(...)
+    {
+        return false;
+    }
+
+    const art::Ptr<recob::Vertex> nuVertex3D = dune_ana::DUNEAnaPFParticleUtils::GetVertex(nuPFP, evt, m_recoModuleLabel);
+    const TVector3 nuVertex3D_tv = TVector3(nuVertex3D->position().X(), nuVertex3D->position().Y(), nuVertex3D->position().Z());
+    /////////////////////////////
+
     const std::vector<art::Ptr<recob::SpacePoint>> spacepoints = dune_ana::DUNEAnaPFParticleUtils::GetSpacePoints(pfparticle, evt, m_recoModuleLabel); 
     const art::Ptr<recob::Vertex> vertex = dune_ana::DUNEAnaPFParticleUtils::GetVertex(pfparticle, evt, m_recoModuleLabel);
+    const TVector3 vertexPos = TVector3(vertex->position().X(), vertex->position().Y(), vertex->position().Z());
+    const float vertexL = (vertexPos - nuVertex3D_tv).Mag();
 
     int nBins = 180;
     float angleMin = 0.f, angleMax = 2.f * M_PI;
@@ -298,12 +312,17 @@ bool GridManager::GetStartExtremalPoints(const art::Event &evt, const art::Ptr<r
 
     for (const art::Ptr<recob::SpacePoint> &spacepoint : spacepoints)
     {
-        const TVector3 vertexPos = TVector3(vertex->position().X(), vertex->position().Y(), vertex->position().Z());
         const TVector3 spacepointPos = TVector3(spacepoint->position().X(), spacepoint->position().Y(), spacepoint->position().Z());
         const TVector3 displacement = spacepointPos - vertexPos;
         const float mag = sqrt((displacement.X() * displacement.X()) + (displacement.Y() * displacement.Y()) + (displacement.Z() * displacement.Z()));
 
         if (mag > m_gridSize3D)
+            continue;
+
+        const float spacepointL = (vertexPos - nuVertex3D_tv).Dot(displacement);
+
+        // ignore hits that are between the pfp vertex and spacepoint?
+        if (spacepointL < vertexL)
             continue;
 
         const float magXZ = sqrt((displacement.X() * displacement.X()) + (displacement.Z() * displacement.Z()));

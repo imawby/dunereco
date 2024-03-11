@@ -17,7 +17,7 @@ ivysaurus_training_files:
   RecoModuleLabel:        'pandora'
   CompletenessThreshold:   0.5
   PurityThreshold:         0.5
-  NSpacepointThreshold:   50
+  NSpacepointThreshold:    50
   WriteVisualisationInfo:  false
 }
 
