@@ -1,0 +1,15 @@
+#include "calorimetry_dune10kt.fcl"
+
+BEGIN_PROLOG
+
+profile_manager:
+{
+  HitModuleLabel:     "hitfd"
+  RecoModuleLabel:    "pandora"
+  TrackModuleLabel:   "pandoraTrack"
+  ShowerModuleLabel:  "pandoraShower"
+  RecombFactor:        0.63
+  CalorimetryAlg:      @local::dune10kt_calorimetryalgmc
+}
+
+END_PROLOG
