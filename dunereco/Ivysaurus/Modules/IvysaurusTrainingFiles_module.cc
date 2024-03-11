@@ -198,8 +198,6 @@ IvysaurusTrainingFiles::~IvysaurusTrainingFiles()
 
 void IvysaurusTrainingFiles::analyze(const art::Event &evt)
 {
-    std::cout << "BEGIN" << std::endl;
-
     const std::vector<art::Ptr<recob::PFParticle>> pfparticles = dune_ana::DUNEAnaEventUtils::GetPFParticles(evt, m_recoModuleLabel);
 
     // Get the neutrino PFP
@@ -262,7 +260,7 @@ void IvysaurusTrainingFiles::analyze(const art::Event &evt)
         // If it isn't a PDG that we care about, move on...
         int absPDG = std::abs(m_truePDG);
 
-        if ((absPDG != 13) && (absPDG != 2212) && (absPDG != 211) && (absPDG != 11) & (absPDG != 22))
+        if ((absPDG != 13) && (absPDG != 2212) && (absPDG != 211) && (absPDG != 11) && (absPDG != 22))
             continue;
 
         ////////////////////////////////////////////                                                                                                                                                                                    
@@ -271,10 +269,8 @@ void IvysaurusTrainingFiles::analyze(const art::Event &evt)
         const art::Ptr<larpandoraobj::PFParticleMetadata> &metadata = dune_ana::DUNEAnaPFParticleUtils::GetMetadata(pfparticle, evt, m_recoModuleLabel);
         const auto metaMap = metadata->GetPropertiesMap();
 
-        if (metaMap.find("TrackScore") == metaMap.end())
-            continue;
-
-        m_trackScore = metaMap.at("TrackScore");
+        if (metaMap.find("TrackScore") != metaMap.end())
+            m_trackScore = metaMap.at("TrackScore");
 
         ////////////////////////////////////////////                                                                                                                                                                                    
         // Now, get space points into file.. 
@@ -296,7 +292,6 @@ void IvysaurusTrainingFiles::analyze(const art::Event &evt)
 
         //std::cout << "m_completeness: " << m_completeness << std::endl;
         //std::cout << "m_purity: " << m_purity << std::endl;
-        //std::cout << "spacepoints.size(): " << spacepoints << std::endl;
 
         if ((m_completeness < m_completenessThreshold) || (m_purity < m_purityThreshold) || (spacepoints.size() < m_nSpacepointThreshold))
             continue;
