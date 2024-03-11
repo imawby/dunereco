@@ -1,0 +1,21 @@
+#include "profilemanager.fcl"
+#include "trackvarmanager.fcl"
+#include "showervarmanager.fcl"
+
+BEGIN_PROLOG
+
+venusaurus_training_files:
+{
+  module_type: VenusaurusTrainingFiles
+
+  ProfileManager:         @local::profile_manager
+  TrackVarManager:        @local::trackvar_manager
+  ShowerVarManager:       @local::showervar_manager
+  HitModuleLabel:         'hitfd'
+  RecoModuleLabel:        'pandora'
+  CompletenessThreshold:   0.5
+  PurityThreshold:         0.5
+  NSpacepointThreshold:    50
+}
+
+END_PROLOG
