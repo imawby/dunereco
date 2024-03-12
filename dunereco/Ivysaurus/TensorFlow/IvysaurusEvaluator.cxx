@@ -48,12 +48,15 @@ ivysaurus::IvysaurusEvaluator::IvysaurusEvaluator(fhicl::ParameterSet const &pse
     cet::search_path sP("FW_SEARCH_PATH");
     sP.find_file(m_networkDirectory, directoryPath);
 
+    std::cout << "Directory path: " << directoryPath << std::endl;
+
     // Load the model bundle. (this returns a status code)
     const auto loadResult = tensorflow::LoadSavedModel(sessionOptions, runOptions, directoryPath, 
         {tensorflow::kSavedModelTagServe}, &m_savedModelBundle);
 
+    //////////////////////////////////////////////
     // Trying to work out the input/output layers
-/*
+    /*
     const auto signatures = m_savedModelBundle.GetSignatures();
     for (auto &entry : signatures)
     {
@@ -79,7 +82,9 @@ ivysaurus::IvysaurusEvaluator::IvysaurusEvaluator(fhicl::ParameterSet const &pse
             std::cout << "outputEntry.second.getName(): " << outputEntry.second.name() << std::endl;
         }
     }
-*/
+    */
+    //////////////////////////////////////////////
+
     // Check if loading was okay.
     TF_CHECK_OK(loadResult);
     std::cout << "GOOOODBYE" << std::endl;
@@ -107,7 +112,6 @@ ivysaurus::IvysaurusEvaluator::IvysaurusScores ivysaurus::IvysaurusEvaluator::Iv
 
     /*
     auto trackVarTensorMap = trackVarTensor.tensor<float, 2>();
-   
     for (int i = 0; i < m_nTrackVars; ++i)
         std::cout << "trackVarTensorMap(0, i): " << trackVarTensorMap(0, i) << std::endl;
     */
@@ -118,7 +122,6 @@ ivysaurus::IvysaurusEvaluator::IvysaurusScores ivysaurus::IvysaurusEvaluator::Iv
 
     /*
     auto showerVarTensorMap = showerVarTensor.tensor<float, 2>();
-    
     for (int i = 0; i < m_nShowerVars; ++i)
         std::cout << "showerVarTensorMap(0, i): " << showerVarTensorMap(0, i) << std::endl;
     */
@@ -172,7 +175,7 @@ ivysaurus::IvysaurusEvaluator::IvysaurusScores ivysaurus::IvysaurusEvaluator::Iv
 
         ++count;
     }
-/*
+    /*
     std::cout << "found an ivysaurus score!!!" << std::endl;
     std::cout << "muonScore: " << ivysaurusScores.m_muonScore << std::endl;
     std::cout << "protonScore: " << ivysaurusScores.m_protonScore << std::endl;
@@ -211,9 +214,6 @@ tensorflow::Tensor ivysaurus::IvysaurusEvaluator::ObtainInputGridTensor(const ar
 
 tensorflow::Tensor ivysaurus::IvysaurusEvaluator::ObtainInputTrackTensor(const art::Event &evt, const art::Ptr<recob::PFParticle> &pfparticle)
 {
-    // Order should be: 
-    // nTrackChildren, nShowerChildren, nGrandChildren, nChildHits, childEnergy, childTrackScore, trackLength, trackWobble, trackScore, momComparison  
-
     tensorflow::Tensor trackVarTensor(tensorflow::DT_FLOAT, tensorflow::TensorShape({1, m_nTrackVars}));
     auto trackVarsTensorMap = trackVarTensor.tensor<float, 2>();
 
@@ -222,6 +222,7 @@ tensorflow::Tensor ivysaurus::IvysaurusEvaluator::ObtainInputTrackTensor(const a
     m_trackVarManager.EvaluateTrackVars(evt, pfparticle, trackVars);
     m_trackVarManager.NormaliseTrackVars(trackVars);
 
+    // ATTN: Order is important!
     trackVarsTensorMap(0, 0) = trackVars.GetNTrackChildren();
     trackVarsTensorMap(0, 1) = trackVars.GetNShowerChildren();
     trackVarsTensorMap(0, 2) = trackVars.GetNGrandChildren();
@@ -240,9 +241,6 @@ tensorflow::Tensor ivysaurus::IvysaurusEvaluator::ObtainInputTrackTensor(const a
 
 tensorflow::Tensor ivysaurus::IvysaurusEvaluator::ObtainInputShowerTensor(const art::Event &evt, const art::Ptr<recob::PFParticle> &pfparticle)
 {
-    // Order should be: 
-    // displacement, dca, trackStubLength
-
     tensorflow::Tensor showerVarTensor(tensorflow::DT_FLOAT, tensorflow::TensorShape({1, m_nShowerVars}));
     auto showerVarsTensorMap = showerVarTensor.tensor<float, 2>();
 
@@ -251,9 +249,23 @@ tensorflow::Tensor ivysaurus::IvysaurusEvaluator::ObtainInputShowerTensor(const 
     m_showerVarManager.EvaluateShowerVars(evt, pfparticle, showerVars);
     m_showerVarManager.NormaliseShowerVars(showerVars);
 
+    // ATTN: Order is important!
     showerVarsTensorMap(0, 0) = showerVars.GetDisplacement();
     showerVarsTensorMap(0, 1) = showerVars.GetDCA();
-    showerVarsTensorMap(0, 2) = showerVars.GetTrackStubLength();
+    showerVarsTensorMap(0, 2) = showerVars.GetInitialGapSize();
+    showerVarsTensorMap(0, 3) = showerVars.GetLargestGapSize();
+    showerVarsTensorMap(0, 4) = showerVars.GetPathwayLength();
+    showerVarsTensorMap(0, 5) = showerVars.GetPathwayScatteringAngle2D();
+    showerVarsTensorMap(0, 6) = showerVars.GetNShowerHits();
+    showerVarsTensorMap(0, 7) = showerVars.GetFoundHitRatio();
+    showerVarsTensorMap(0, 8) = showerVars.GetScatterAngle();
+    showerVarsTensorMap(0, 9) = showerVars.GetOpeningAngle();
+    showerVarsTensorMap(0, 10) = showerVars.GetNuVertexEnergyAsymmetry();
+    showerVarsTensorMap(0, 11) = showerVars.GetNuVertexEnergyWeightedMeanRadialDistance();
+    showerVarsTensorMap(0, 12) = showerVars.GetShowerStartEnergyAsymmetry();
+    showerVarsTensorMap(0, 13) = showerVars.GetShowerStartMoliereRadius();
+    showerVarsTensorMap(0, 14) = showerVars.GetNAmbiguousViews();
+    showerVarsTensorMap(0, 15) = showerVars.GetUnaccountedEnergy();
 
     return showerVarTensor;
 }
