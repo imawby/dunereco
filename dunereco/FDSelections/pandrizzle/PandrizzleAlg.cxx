@@ -511,7 +511,7 @@ void FDSelection::PandrizzleAlg::FillBackupPandrizzleInfo(const art::Ptr<recob::
       fVarHolder.m_trajPositionY.push_back(initialTrackStub.at(0)->LocationAtPoint(i).Y());
       fVarHolder.m_trajPositionZ.push_back(initialTrackStub.at(0)->LocationAtPoint(i).Z());
     }
-        
+
     fVarHolder.FloatVars["FoundTrackStub"] = 1.0;
 
     float modularShowerPathwayLengthMin(-10.f), modularShowerPathwayKink3D(-10.f);
@@ -699,11 +699,18 @@ void FDSelection::PandrizzleAlg::GetShowerRegionVariables(const TVector3 &nuVert
 
     const pandora::CartesianVector pandoraNuVertex(nuVertex.X(), nuVertex.Y(), nuVertex.Z());
     const pandora::CartesianVector connectionPathwaySeed(pandoraNuVertex + 
-    (pandora::CartesianVector(trackStub->StartDirection().X(), trackStub->StartDirection().Y(), trackStub->StartDirection().Z()) * 1.0));
+    (pandora::CartesianVector(trackStub->StartDirection().X(), trackStub->StartDirection().Y(), trackStub->StartDirection().Z()) * 10.0));
 
     const pandora::CartesianVector connectionPathwaySeedU(connectionPathwaySeed.GetX(), 0.0, YZtoU(connectionPathwaySeed.GetY(), connectionPathwaySeed.GetZ()));
     const pandora::CartesianVector connectionPathwaySeedV(connectionPathwaySeed.GetX(), 0.0, YZtoV(connectionPathwaySeed.GetY(), connectionPathwaySeed.GetZ()));
     const pandora::CartesianVector connectionPathwaySeedW(connectionPathwaySeed.GetX(), 0.0, YZtoW(connectionPathwaySeed.GetY(), connectionPathwaySeed.GetZ()));
+
+    if (((connectionPathwaySeedU - nuVertexU).GetMagnitudeSquared() < std::numeric_limits<float>::epsilon()) || 
+        ((connectionPathwaySeedV - nuVertexV).GetMagnitudeSquared() < std::numeric_limits<float>::epsilon()) ||
+        ((connectionPathwaySeedW - nuVertexW).GetMagnitudeSquared() < std::numeric_limits<float>::epsilon()))
+    {
+        return;
+    }
 
     pandora::CartesianVector connectionPathwayDirectionU((connectionPathwaySeedU - nuVertexU).GetUnitVector());
     pandora::CartesianVector connectionPathwayDirectionV((connectionPathwaySeedV - nuVertexV).GetUnitVector());
@@ -714,7 +721,7 @@ void FDSelection::PandrizzleAlg::GetShowerRegionVariables(const TVector3 &nuVert
     const geo::Vector_t showerStartV(showerStart.X(), 0.0, YZtoV(showerStart.Y(), showerStart.Z()));
     const geo::Vector_t showerStartW(showerStart.X(), 0.0, YZtoW(showerStart.Y(), showerStart.Z()));
 
-    const geo::Vector_t showerDirectionSeed(showerStart + (trackStub->EndDirection() * 1.0));
+    const geo::Vector_t showerDirectionSeed(showerStart + (trackStub->EndDirection() * 10.0));
     const geo::Vector_t showerDirectionSeedU(showerDirectionSeed.X(), 0.0, YZtoU(showerDirectionSeed.Y(), showerDirectionSeed.Z()));
     const geo::Vector_t showerDirectionSeedV(showerDirectionSeed.X(), 0.0, YZtoV(showerDirectionSeed.Y(), showerDirectionSeed.Z()));
     const geo::Vector_t showerDirectionSeedW(showerDirectionSeed.X(), 0.0, YZtoW(showerDirectionSeed.Y(), showerDirectionSeed.Z()));
@@ -722,6 +729,13 @@ void FDSelection::PandrizzleAlg::GetShowerRegionVariables(const TVector3 &nuVert
     geo::Vector_t showerDirectionU(showerDirectionSeedU - showerStartU);
     geo::Vector_t showerDirectionV(showerDirectionSeedV - showerStartV);
     geo::Vector_t showerDirectionW(showerDirectionSeedW - showerStartW);
+
+    if ((showerDirectionU.Mag2() < std::numeric_limits<float>::epsilon()) || 
+        (showerDirectionV.Mag2() < std::numeric_limits<float>::epsilon()) ||
+        (showerDirectionW.Mag2() < std::numeric_limits<float>::epsilon()))
+    {
+        return;
+    }
 
     showerDirectionU = showerDirectionU / std::sqrt(showerDirectionU.Mag2());
     showerDirectionV = showerDirectionV / std::sqrt(showerDirectionV.Mag2());
@@ -1147,7 +1161,8 @@ void FDSelection::PandrizzleAlg::ResetTreeVariables()
 double FDSelection::PandrizzleAlg::YZtoU(double y, double z)
 {
     const double wireAngleU(0.623257);
-    return (z * std::cos(wireAngleU) - y * std::sin(wireAngleU));
+    const double U(z * std::cos(wireAngleU) - y * std::sin(wireAngleU));
+    return U;
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////
@@ -1155,7 +1170,8 @@ double FDSelection::PandrizzleAlg::YZtoU(double y, double z)
 double FDSelection::PandrizzleAlg::YZtoV(double y, double z)
 {
     const double wireAngleV(-0.623257);
-    return (z * std::cos(wireAngleV) - y * std::sin(wireAngleV));
+    const double V(z * std::cos(wireAngleV) - y * std::sin(wireAngleV));
+    return V;
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////
@@ -1163,7 +1179,8 @@ double FDSelection::PandrizzleAlg::YZtoV(double y, double z)
 double FDSelection::PandrizzleAlg::YZtoW(double y, double z)
 {
     const double wireAngleW(0.0);
-    return (z * std::cos(wireAngleW) - y * std::sin(wireAngleW));
+    const double W(z * std::cos(wireAngleW) - y * std::sin(wireAngleW));
+    return W;
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////

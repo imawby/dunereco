@@ -175,7 +175,7 @@ ivysaurus::IvysaurusEvaluator::IvysaurusScores ivysaurus::IvysaurusEvaluator::Iv
 
         ++count;
     }
-    /*
+
     std::cout << "found an ivysaurus score!!!" << std::endl;
     std::cout << "muonScore: " << ivysaurusScores.m_muonScore << std::endl;
     std::cout << "protonScore: " << ivysaurusScores.m_protonScore << std::endl;
@@ -184,7 +184,7 @@ ivysaurus::IvysaurusEvaluator::IvysaurusScores ivysaurus::IvysaurusEvaluator::Iv
     std::cout << "photonScore: " << ivysaurusScores.m_photonScore << std::endl;
     std::cout << "otherScore: " << ivysaurusScores.m_otherScore << std::endl;
     std::cout << "particleType: " << ivysaurusScores.m_particleType << std::endl;
-*/
+
     TF_CHECK_OK(status);
 
     return ivysaurusScores;

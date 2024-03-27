@@ -5,6 +5,7 @@
 #include "ivysaurusevaluator.fcl"
 #include "pandizzle.fcl"
 #include "pandrizzle.fcl"
+#include "trueenergycalc.fcl"
 
 BEGIN_PROLOG
 
@@ -33,6 +34,7 @@ CCNuSelection:
    PandrizzleConfig:       @local::pandrizzle
    IvysaurusEvaluator:     @local::ivysaurus_evaluator
    ctpHelper:              @local::standard_ctphelper
+   TrueEnergyCalc:         @local::true_energy_calc
 }
 
 END_PROLOG

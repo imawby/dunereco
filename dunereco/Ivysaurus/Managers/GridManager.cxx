@@ -230,7 +230,9 @@ GridManager::Grid GridManager::ObtainViewGrid(const art::Event &evt, const art::
     if (isStart)
     {
         if (!GetStartExtremalPoints(evt, pfparticle, position1, position2))
+        {
             return Grid(TVector3(0.f, 0.f, 0.f), 0.f, 0.f, 0, m_maxGridEntry, m_nSigmaConsidered, m_integralStep, pandoraView, false);
+        }
     }
     else
     {
@@ -282,7 +284,7 @@ bool GridManager::GetStartExtremalPoints(const art::Event &evt, const art::Ptr<r
     {
         nuPFP = dune_ana::DUNEAnaEventUtils::GetNeutrino(evt, m_recoModuleLabel);
     }
-    catch(...)
+    catch (...)
     {
         return false;
     }
@@ -292,105 +294,111 @@ bool GridManager::GetStartExtremalPoints(const art::Event &evt, const art::Ptr<r
     /////////////////////////////
 
     const std::vector<art::Ptr<recob::SpacePoint>> spacepoints = dune_ana::DUNEAnaPFParticleUtils::GetSpacePoints(pfparticle, evt, m_recoModuleLabel); 
-    const art::Ptr<recob::Vertex> vertex = dune_ana::DUNEAnaPFParticleUtils::GetVertex(pfparticle, evt, m_recoModuleLabel);
-    const TVector3 vertexPos = TVector3(vertex->position().X(), vertex->position().Y(), vertex->position().Z());
-    const float vertexL = (vertexPos - nuVertex3D_tv).Mag();
 
-    int nBins = 180;
-    float angleMin = 0.f, angleMax = 2.f * M_PI;
-    float binWidth = (angleMax - angleMin) / static_cast<float>(nBins);
-
-    std::vector<std::vector<int>> spatialDist(nBins, std::vector<int>(nBins, 0));
-    std::vector<std::vector<float>> energyDist(nBins, std::vector<float>(nBins, 0.f));
-
-    // theta0YZ then theta0XZ
-    // measure from Y to Z, and Z to X? fool.
-    int highestSP = 0;
-    float highestEnergy = 0.f;
-    int bestTheta0YZBin = -1;
-    int bestTheta0XZBin = -1; 
-
-    for (const art::Ptr<recob::SpacePoint> &spacepoint : spacepoints)
-    {
-        const TVector3 spacepointPos = TVector3(spacepoint->position().X(), spacepoint->position().Y(), spacepoint->position().Z());
-        const TVector3 displacement = spacepointPos - vertexPos;
-        const float mag = sqrt((displacement.X() * displacement.X()) + (displacement.Y() * displacement.Y()) + (displacement.Z() * displacement.Z()));
-
-        if (mag > m_gridSize3D)
-            continue;
-
-        const float spacepointL = (vertexPos - nuVertex3D_tv).Dot(displacement);
-
-        // ignore hits that are between the pfp vertex and spacepoint?
-        if (spacepointL < vertexL)
-            continue;
-
-        const float magXZ = sqrt((displacement.X() * displacement.X()) + (displacement.Z() * displacement.Z()));
-
-        float theta0YZ = (mag < std::numeric_limits<float>::epsilon()) ? 0.f : 
-            (std::fabs(std::fabs(displacement.Y() / mag) - 1.f) < std::numeric_limits<float>::epsilon()) ? 0.f : 
-            std::acos(displacement.Y() / mag);
-
-        float theta0XZ = (magXZ < std::numeric_limits<float>::epsilon()) ? 0.f : 
-            (std::fabs(std::fabs(displacement.Z() / magXZ) - 1.f) < std::numeric_limits<float>::epsilon()) ? 0.f :
-            std::acos(displacement.Z() / magXZ);
-
-        // try do signed-ness
-        if (displacement.Z() < 0.f)
-            theta0YZ += M_PI;
-
-        if (displacement.X() < 0.f)
-            theta0XZ += M_PI;
-
-        const int bin0YZ = std::floor(theta0YZ / binWidth);
-        const int bin0XZ = std::floor(theta0XZ / binWidth);
-
-        const std::vector<art::Ptr<recob::Hit>> assocHits = dune_ana::DUNEAnaSpacePointUtils::GetHits(spacepoint, evt, m_recoModuleLabel);
-
-        if (assocHits.empty())
-            continue;
-
-        spatialDist[bin0YZ][bin0XZ] += 1;
-        energyDist[bin0YZ][bin0XZ] += ObtainHitEnergy(evt, assocHits.front());
-
-        if (((spatialDist[bin0YZ][bin0XZ] == highestSP) && (energyDist[bin0YZ][bin0XZ] > highestEnergy)) ||
-            (spatialDist[bin0YZ][bin0XZ] > highestSP))
-        {
-            highestSP = spatialDist[bin0YZ][bin0XZ];
-            highestEnergy = energyDist[bin0YZ][bin0XZ];
-            bestTheta0YZBin = bin0YZ;
-            bestTheta0XZBin = bin0XZ;
-        }
-    }
-
-    if ((bestTheta0YZBin < 0) || (bestTheta0XZBin < 0))
+    if (spacepoints.empty())
         return false;
 
-    const float bestTheta0YZ = angleMin + ((static_cast<float>(bestTheta0YZBin) + 0.5f) * binWidth);
-    const float bestTheta0XZ = angleMin + ((static_cast<float>(bestTheta0XZBin) + 0.5f) * binWidth);
+    try
+    {
+        const art::Ptr<recob::Vertex> vertex = dune_ana::DUNEAnaPFParticleUtils::GetVertex(pfparticle, evt, m_recoModuleLabel);
 
-    /*
-    const float y = std::cos(bestTheta0YZ);
-    const float xzMag = std::sin(bestTheta0YZ); 
-    const float x = xzMag * std::sin(bestTheta0XZ);
-    const float z = xzMag * std::cos(bestTheta0XZ);
-    */
+        const TVector3 vertexPos = TVector3(vertex->position().X(), vertex->position().Y(), vertex->position().Z());
+        const float vertexL = (vertexPos - nuVertex3D_tv).Mag();
 
-    TVector3 direction = TVector3(std::fabs(std::sin(bestTheta0YZ) * std::sin(bestTheta0XZ)), std::fabs(std::cos(bestTheta0YZ)), 
-        std::fabs(std::sin(bestTheta0YZ) * std::cos(bestTheta0XZ)));
+        int nBins = 180;
+        float angleMin = 0.f, angleMax = 2.f * M_PI;
+        float binWidth = (angleMax - angleMin) / static_cast<float>(nBins);
 
-    if (bestTheta0XZ > M_PI)
-        direction.SetX(direction.X() * -1.f);
+        std::vector<std::vector<int>> spatialDist(nBins, std::vector<int>(nBins, 0));
+        std::vector<std::vector<float>> energyDist(nBins, std::vector<float>(nBins, 0.f));
 
-    if (bestTheta0YZ > M_PI)
-        direction.SetZ(direction.Z() * -1.f);
+        // theta0YZ then theta0XZ
+        // measure from Y to Z, and Z to X? fool.
+        int highestSP = 0;
+        float highestEnergy = 0.f;
+        int bestTheta0YZBin = -1;
+        int bestTheta0XZBin = -1; 
 
-    if ((bestTheta0YZ > (M_PI / 2.f)) && (bestTheta0YZ < (M_PI * 3.f / 2.f)))
-        direction.SetY(direction.Y() * -1.f);
+        for (const art::Ptr<recob::SpacePoint> &spacepoint : spacepoints)
+        {
+            const TVector3 spacepointPos = TVector3(spacepoint->position().X(), spacepoint->position().Y(), spacepoint->position().Z());
+            const TVector3 displacement = spacepointPos - vertexPos;
+            const float mag = sqrt((displacement.X() * displacement.X()) + (displacement.Y() * displacement.Y()) + (displacement.Z() * displacement.Z()));
 
-    position1 = TVector3(vertex->position().X(), vertex->position().Y(), vertex->position().Z());
-    const float diagonalLength = sqrt(2.0 * (m_gridSize3D * m_gridSize3D));
-    position2 = position1 + (direction * diagonalLength);
+            if (mag > m_gridSize3D)
+                continue;
+
+            const float spacepointL = (vertexPos - nuVertex3D_tv).Dot(displacement);
+
+            // ignore hits that are between the pfp vertex and spacepoint?
+            if (spacepointL < vertexL)
+                continue;
+
+            const float magXZ = sqrt((displacement.X() * displacement.X()) + (displacement.Z() * displacement.Z()));
+
+            float theta0YZ = (mag < std::numeric_limits<float>::epsilon()) ? 0.f : 
+                (std::fabs(std::fabs(displacement.Y() / mag) - 1.f) < std::numeric_limits<float>::epsilon()) ? 0.f : 
+                std::acos(displacement.Y() / mag);
+
+            float theta0XZ = (magXZ < std::numeric_limits<float>::epsilon()) ? 0.f : 
+                (std::fabs(std::fabs(displacement.Z() / magXZ) - 1.f) < std::numeric_limits<float>::epsilon()) ? 0.f :
+                std::acos(displacement.Z() / magXZ);
+
+            // try do signed-ness
+            if (displacement.Z() < 0.f)
+                theta0YZ += M_PI;
+
+            if (displacement.X() < 0.f)
+                theta0XZ += M_PI;
+
+            const int bin0YZ = std::floor(theta0YZ / binWidth);
+            const int bin0XZ = std::floor(theta0XZ / binWidth);
+
+            const std::vector<art::Ptr<recob::Hit>> assocHits = dune_ana::DUNEAnaSpacePointUtils::GetHits(spacepoint, evt, m_recoModuleLabel);
+
+            if (assocHits.empty())
+                continue;
+
+            spatialDist[bin0YZ][bin0XZ] += 1;
+            energyDist[bin0YZ][bin0XZ] += ObtainHitEnergy(evt, assocHits.front());
+
+            if (((spatialDist[bin0YZ][bin0XZ] == highestSP) && (energyDist[bin0YZ][bin0XZ] > highestEnergy)) ||
+                (spatialDist[bin0YZ][bin0XZ] > highestSP))
+            {
+                highestSP = spatialDist[bin0YZ][bin0XZ];
+                highestEnergy = energyDist[bin0YZ][bin0XZ];
+                bestTheta0YZBin = bin0YZ;
+                bestTheta0XZBin = bin0XZ;
+            }
+        }
+
+        if ((bestTheta0YZBin < 0) || (bestTheta0XZBin < 0))
+            return false;
+
+        const float bestTheta0YZ = angleMin + ((static_cast<float>(bestTheta0YZBin) + 0.5f) * binWidth);
+        const float bestTheta0XZ = angleMin + ((static_cast<float>(bestTheta0XZBin) + 0.5f) * binWidth);
+
+        TVector3 direction = TVector3(std::fabs(std::sin(bestTheta0YZ) * std::sin(bestTheta0XZ)), std::fabs(std::cos(bestTheta0YZ)), 
+                                      std::fabs(std::sin(bestTheta0YZ) * std::cos(bestTheta0XZ)));
+
+        if (bestTheta0XZ > M_PI)
+            direction.SetX(direction.X() * -1.f);
+
+        if (bestTheta0YZ > M_PI)
+            direction.SetZ(direction.Z() * -1.f);
+
+        if ((bestTheta0YZ > (M_PI / 2.f)) && (bestTheta0YZ < (M_PI * 3.f / 2.f)))
+            direction.SetY(direction.Y() * -1.f);
+
+        position1 = TVector3(vertex->position().X(), vertex->position().Y(), vertex->position().Z());
+        const float diagonalLength = sqrt(2.0 * (m_gridSize3D * m_gridSize3D));
+        position2 = position1 + (direction * diagonalLength);
+    }
+    catch (...)
+    {
+        std::cout << "spacePoints.size(): " << spacepoints.size() << std::endl;
+        return false;
+    }
 
     return true;
 }
