@@ -1,6 +1,7 @@
 add_subdirectory(pandrizzle)
 add_subdirectory(pandizzle)
 add_subdirectory(FDSelectionData)
+add_subdirectory(EnergyReco)
 
 if(( DEFINED ENV{TENSORFLOW_DIR} ) AND ( DEFINED ENV{TRITON_DIR} ))
   
@@ -35,6 +36,7 @@ art_make( LIBRARY_NAME FDSelection
             NeutrinoEnergyRecoAlg
             PandrizzleAlg
             PandizzleAlg
+            dunereco_FDSelections_EnergyReco
 
 MODULE_LIBRARIES FDSelection
           	           ${ART_FRAMEWORK_CORE}

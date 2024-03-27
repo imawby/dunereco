@@ -32,6 +32,7 @@
 #include "nusimdata/SimulationBase/MCTruth.h"
 #include "nusimdata/SimulationBase/MCFlux.h"
 #include "larcoreobj/SummaryData/POTSummary.h"
+#include "lardataobj/Simulation/SimEnergyDeposit.h"
 #include "lardataobj/RecoBase/SpacePoint.h"
 #include "lardataobj/RecoBase/Track.h"
 #include "lardataobj/RecoBase/PFParticleMetadata.h"
@@ -61,6 +62,7 @@
 #include "dunereco/AnaUtils/DUNEAnaHitUtils.h"
 
 //Custom
+#include "dunereco/FDSelections/EnergyReco/TrueEnergyCalc.h"
 #include "dunereco/FDSelections/pandizzle/PandizzleAlg.h"
 #include "dunereco/FDSelections/pandrizzle/PandrizzleAlg.h"
 #include "FDSelectionUtils.h"
@@ -134,6 +136,7 @@ private:
   int fTargetZ; //Atomic number of scattering target
   double fQ2; 
   double fENu; 
+  double fTrueNuEnergyEDep; 
   double fW; //X-Sec params
   double fX;
   double fY;
@@ -148,6 +151,7 @@ private:
   //Outgoing Lepton 
   int fLepPDG;
   double fLepEnergy;
+  double fTrueLepEnergyEDep;
   double fMomLepX;
   double fMomLepY;
   double fMomLepZ;
@@ -168,6 +172,12 @@ private:
   double  fFinalMomTranMagNoLepWithRem;
   double  fFinalMomTranMagWithLepNoRem;
   double  fFinalMomTranMagWithLepWithRem;
+  std::vector<float> fTrueEnergyDepX_Inner;
+  std::vector<float> fTrueEnergyDepY_Inner;
+  std::vector<float> fTrueEnergyDepZ_Inner;
+  std::vector<float> fTrueEnergyDepX_Outer;
+  std::vector<float> fTrueEnergyDepY_Outer;
+  std::vector<float> fTrueEnergyDepZ_Outer;
   ////////////////////////////////////////
   // Event-level reco
   ////////////////////////////////////////
@@ -189,7 +199,9 @@ private:
   ////////////////////////////////////////
   // Truth
   int fRecoPFPTruePDG[kMaxPFParticles];
+  int fRecoPFPTrueTrackID[kMaxPFParticles];
   bool fRecoPFPTruePrimary[kMaxPFParticles];
+  double fRecoPFPTrueEnergyEDep[kMaxPFParticles];
   double fRecoPFPTrueMomX[kMaxPFParticles];
   double fRecoPFPTrueMomY[kMaxPFParticles];
   double fRecoPFPTrueMomZ[kMaxPFParticles];
@@ -352,6 +364,7 @@ private:
   ctp::CTPHelper fConvTrackPID;
   dune::NeutrinoEnergyRecoAlg fNeutrinoEnergyRecoAlg;
   ivysaurus::IvysaurusEvaluator fIvysaurusEvaluator;
+  TrueEnergyCalc fTrueEnergyCalc;
   ////////////////////////////////////////
   // DUNE CVN Scores
   ////////////////////////////////////////
@@ -380,7 +393,8 @@ FDSelection::CCNuSelection::CCNuSelection(fhicl::ParameterSet const & pset) :
   fConvTrackPID(pset.get<fhicl::ParameterSet>("ctpHelper")),
   fNeutrinoEnergyRecoAlg(pset.get<fhicl::ParameterSet>("NeutrinoEnergyRecoAlg"), fTrackModuleLabel, fShowerModuleLabel,
       fHitsModuleLabel, fWireModuleLabel, fTrackModuleLabel, fShowerModuleLabel, fRecoModuleLabel),
-  fIvysaurusEvaluator(pset.get<fhicl::ParameterSet>("IvysaurusEvaluator"))
+  fIvysaurusEvaluator(pset.get<fhicl::ParameterSet>("IvysaurusEvaluator")),
+  fTrueEnergyCalc(pset.get<fhicl::ParameterSet>("TrueEnergyCalc"))
 {
 }
 
@@ -388,27 +402,27 @@ FDSelection::CCNuSelection::CCNuSelection(fhicl::ParameterSet const & pset) :
 
 void FDSelection::CCNuSelection::analyze(art::Event const & evt)
 {
-    std::cout << "AAAAA" << std::endl;
+    //std::cout << "AAAAA" << std::endl;
     Reset();
-    std::cout << "BBB" << std::endl;
+    //std::cout << "BBB" << std::endl;
     fRun = evt.run();
     fSubRun = evt.subRun();
     fEvent = evt.event();
     fIsMC = !evt.isRealData();
-    std::cout << "CCC" << std::endl;
+    //std::cout << "CCC" << std::endl;
     GetEventInfo(evt);
-    std::cout << "DDD" << std::endl;
+    //std::cout << "DDD" << std::endl;
     if (fIsMC) 
         GetTruthInfo(evt);
-    std::cout << "EEE" << std::endl;
+    //std::cout << "EEE" << std::endl;
     FillVertexInfo(evt);
-    std::cout << "FFF" << std::endl;
+    //std::cout << "FFF" << std::endl;
     FillPFParticleInfo(evt);
-    std::cout << "GGG" << std::endl;
+    //std::cout << "GGG" << std::endl;
     RunTrackSelection(evt);
-    std::cout << "HHH" << std::endl;
+    //std::cout << "HHH" << std::endl;
     RunShowerSelection(evt);
-    std::cout << "III" << std::endl;
+    //std::cout << "III" << std::endl;
 
     fTree->Fill();
 }
@@ -422,9 +436,9 @@ void FDSelection::CCNuSelection::beginJob()
     ///////////////////////////
     art::ServiceHandle<art::TFileService> tfs;
     fPOTTree = tfs->make<TTree>("pottree","pot tree");
-    fPOTTree->Branch("POT",&fPOT);
-    fPOTTree->Branch("Run",&fRun);
-    fPOTTree->Branch("SubRun",&fSubRun);
+    fPOTTree->Branch("POT", &fPOT);
+    fPOTTree->Branch("Run", &fRun);
+    fPOTTree->Branch("SubRun", &fSubRun);
 
     ///////////////////////////
     // CCNuSelection tree
@@ -434,66 +448,73 @@ void FDSelection::CCNuSelection::beginJob()
     ////////////////////////////
     // Event info
     ////////////////////////////
-    fTree->Branch("Run",&fRun);
-    fTree->Branch("SubRun",&fSubRun);
-    fTree->Branch("Event",&fEvent);
+    fTree->Branch("Run", &fRun);
+    fTree->Branch("SubRun", &fSubRun);
+    fTree->Branch("Event", &fEvent);
 
     ////////////////////////////
     // True info
     ////////////////////////////
-    fTree->Branch("NuPdg",&fNuPdg);
-    fTree->Branch("BeamPdg",&fBeamPdg);
-    fTree->Branch("NC",&fNC);
-    fTree->Branch("Mode",&fMode);
-    fTree->Branch("TargetZ",&fTargetZ);
-    fTree->Branch("Enu",&fENu);
-    fTree->Branch("NuX",&fNuX);
-    fTree->Branch("NuY",&fNuY);
-    fTree->Branch("NuZ",&fNuZ);
-    fTree->Branch("IsMC",&fIsMC);
-    fTree->Branch("T0",&fT0);
-    fTree->Branch("Q2",&fQ2);
-    fTree->Branch("W",&fW);
-    fTree->Branch("X",&fX);
-    fTree->Branch("Y",&fY);
-    fTree->Branch("NuMomX",&fNuMomX);
-    fTree->Branch("NuMomY",&fNuMomY);
-    fTree->Branch("NuMomZ",&fNuMomZ);
-    fTree->Branch("NuMomT",&fNuMomT);
-    fTree->Branch("NuT",&fNuT);
-    fTree->Branch("LepPDG",&fLepPDG);
+    fTree->Branch("NuPdg", &fNuPdg);
+    fTree->Branch("BeamPdg", &fBeamPdg);
+    fTree->Branch("NC", &fNC);
+    fTree->Branch("Mode", &fMode);
+    fTree->Branch("TargetZ", &fTargetZ);
+    fTree->Branch("Enu", &fENu);
+    fTree->Branch("TrueNuEnergyEDep", &fTrueNuEnergyEDep);
+    fTree->Branch("NuX", &fNuX);
+    fTree->Branch("NuY", &fNuY);
+    fTree->Branch("NuZ", &fNuZ);
+    fTree->Branch("IsMC", &fIsMC);
+    fTree->Branch("T0", &fT0);
+    fTree->Branch("Q2", &fQ2);
+    fTree->Branch("W", &fW);
+    fTree->Branch("X", &fX);
+    fTree->Branch("Y", &fY);
+    fTree->Branch("NuMomX", &fNuMomX);
+    fTree->Branch("NuMomY", &fNuMomY);
+    fTree->Branch("NuMomZ", &fNuMomZ);
+    fTree->Branch("NuMomT", &fNuMomT);
+    fTree->Branch("NuT", &fNuT);
+    fTree->Branch("LepPDG", &fLepPDG);
     fTree->Branch("LepEnergy", &fLepEnergy);
-    fTree->Branch("MomLepX",&fMomLepX);
-    fTree->Branch("MomLepY",&fMomLepY);
-    fTree->Branch("MomLepZ",&fMomLepZ);
-    fTree->Branch("MomLepT",&fMomLepT);
-    fTree->Branch("LepEndX",&fLepEndX);
-    fTree->Branch("LepEndY",&fLepEndY);
-    fTree->Branch("LepEndZ",&fLepEndZ);
-    fTree->Branch("LepEndT",&fLepEndT);
-    fTree->Branch("LepNuAngle",&fLepNuAngle);
+    fTree->Branch("TrueLepEnergyEDep", &fTrueLepEnergyEDep);
+    fTree->Branch("MomLepX", &fMomLepX);
+    fTree->Branch("MomLepY", &fMomLepY);
+    fTree->Branch("MomLepZ", &fMomLepZ);
+    fTree->Branch("MomLepT", &fMomLepT);
+    fTree->Branch("LepEndX", &fLepEndX);
+    fTree->Branch("LepEndY", &fLepEndY);
+    fTree->Branch("LepEndZ", &fLepEndZ);
+    fTree->Branch("LepEndT", &fLepEndT);
+    fTree->Branch("LepNuAngle", &fLepNuAngle);
     fTree->Branch("LepHasMichelDecay", &fLepHasMichelDecay);
-    fTree->Branch("NuMomTranMag",&fNuMomTranMag);
-    fTree->Branch("TargNuclMomTranMag",&fTargNuclMomTranMag);
-    fTree->Branch("InitalMomTranMag",&fInitalMomTranMag);
-    fTree->Branch("LepMomTranMag",&fLepMomTranMag);
-    fTree->Branch("NuclRemMomTranMag",&fNuclRemMomTranMag);
-    fTree->Branch("FinalMomTranMagNoLepNoRem",&fFinalMomTranMagNoLepNoRem);
-    fTree->Branch("FinalMomTranMagNoLepWithRem",&fFinalMomTranMagNoLepWithRem);
-    fTree->Branch("FinalMomTranMagWithLepNoRem",&fFinalMomTranMagWithLepNoRem);
-    fTree->Branch("FinalMomTranMagWithLepWithRem",&fFinalMomTranMagWithLepWithRem);
-
+    fTree->Branch("NuMomTranMag", &fNuMomTranMag);
+    fTree->Branch("TargNuclMomTranMag", &fTargNuclMomTranMag);
+    fTree->Branch("InitalMomTranMag", &fInitalMomTranMag);
+    fTree->Branch("LepMomTranMag", &fLepMomTranMag);
+    fTree->Branch("NuclRemMomTranMag", &fNuclRemMomTranMag);
+    fTree->Branch("FinalMomTranMagNoLepNoRem", &fFinalMomTranMagNoLepNoRem);
+    fTree->Branch("FinalMomTranMagNoLepWithRem", &fFinalMomTranMagNoLepWithRem);
+    fTree->Branch("FinalMomTranMagWithLepNoRem", &fFinalMomTranMagWithLepNoRem);
+    fTree->Branch("FinalMomTranMagWithLepWithRem", &fFinalMomTranMagWithLepWithRem);
+    fTree->Branch("TrueEnergyDepX_Inner", &fTrueEnergyDepX_Inner);
+    fTree->Branch("TrueEnergyDepY_Inner", &fTrueEnergyDepY_Inner);
+    fTree->Branch("TrueEnergyDepZ_Inner", &fTrueEnergyDepZ_Inner);
+    fTree->Branch("TrueEnergyDepX_Outer", &fTrueEnergyDepX_Outer);
+    fTree->Branch("TrueEnergyDepY_Outer", &fTrueEnergyDepY_Outer);
+    fTree->Branch("TrueEnergyDepZ_Outer", &fTrueEnergyDepZ_Outer);
     ////////////////////////////
     // Event-level reco info 
     ////////////////////////////
     fTree->Branch("NRecoPFPs", &fNRecoPFPs);
-    fTree->Branch("RecoNuVtxX",&fRecoNuVtxX);
-    fTree->Branch("RecoNuVtxY",&fRecoNuVtxY);
-    fTree->Branch("RecoNuVtxZ",&fRecoNuVtxZ);
-    fTree->Branch("RecoNuVtxNShowers",&fRecoNuVtxNShowers);
-    fTree->Branch("RecoNuVtxNTracks",&fRecoNuVtxNTracks);
-    fTree->Branch("RecoNuVtxNChildren",&fRecoNuVtxNChildren);
-    fTree->Branch("RecoEventCharge",&fRecoEventCharge);
+    fTree->Branch("RecoNuVtxX", &fRecoNuVtxX);
+    fTree->Branch("RecoNuVtxY", &fRecoNuVtxY);
+    fTree->Branch("RecoNuVtxZ", &fRecoNuVtxZ);
+    fTree->Branch("RecoNuVtxNShowers", &fRecoNuVtxNShowers);
+    fTree->Branch("RecoNuVtxNTracks", &fRecoNuVtxNTracks);
+    fTree->Branch("RecoNuVtxNChildren", &fRecoNuVtxNChildren);
+    fTree->Branch("RecoEventCharge", &fRecoEventCharge);
     fTree->Branch("NumuRecoENu", fNumuRecoENu, "NumuRecoENu[NRecoPFPs]/D");
     fTree->Branch("NumuRecoMomLep", fNumuRecoMomLep, "NumuRecoMomLep[NRecoPFPs]/D");
     fTree->Branch("NumuRecoEHad", fNumuRecoEHad, "fNumuRecoEHad[NRecoPFPs]/D");
@@ -514,34 +535,36 @@ void FDSelection::CCNuSelection::beginJob()
     ////////////////////////////
     // True
     fTree->Branch("RecoPFPTruePDG", fRecoPFPTruePDG, "RecoPFPTruePDG[NRecoPFPs]/I");
-    fTree->Branch("RecoPFPTruePrimary",fRecoPFPTruePrimary,"RecoPFPTruePrimary[NRecoPFPs]/O");
-    fTree->Branch("RecoPFPTrueMomX",fRecoPFPTrueMomX,"RecoPFPTrueMomX[NRecoPFPs]/D");
-    fTree->Branch("RecoPFPTrueMomY",fRecoPFPTrueMomY,"RecoPFPTrueMomY[NRecoPFPs]/D");
-    fTree->Branch("RecoPFPTrueMomZ",fRecoPFPTrueMomZ,"RecoPFPTrueMomZ[NRecoPFPs]/D");
-    fTree->Branch("RecoPFPTrueMomT",fRecoPFPTrueMomT,"RecoPFPTrueMomT[NRecoPFPs]/D");
-    fTree->Branch("RecoPFPTrueStartX",fRecoPFPTrueStartX,"RecoPFPTrueStartX[NRecoPFPs]/D");
-    fTree->Branch("RecoPFPTrueStartY",fRecoPFPTrueStartY,"RecoPFPTrueStartY[NRecoPFPs]/D");
-    fTree->Branch("RecoPFPTrueStartZ",fRecoPFPTrueStartZ,"RecoPFPTrueStartZ[NRecoPFPs]/D");
-    fTree->Branch("RecoPFPTrueEndX",fRecoPFPTrueEndX,"RecoPFPTrueEndX[NRecoPFPs]/D");
-    fTree->Branch("RecoPFPTrueEndY",fRecoPFPTrueEndY,"RecoPFPTrueEndY[NRecoPFPs]/D");
-    fTree->Branch("RecoPFPTrueEndZ",fRecoPFPTrueEndZ,"RecoPFPTrueEndZ[NRecoPFPs]/D");
+    fTree->Branch("RecoPFPTrueTrackID", fRecoPFPTrueTrackID, "RecoPFPTrueTrackID[NRecoPFPs]/I");
+    fTree->Branch("RecoPFPTruePrimary", fRecoPFPTruePrimary,"RecoPFPTruePrimary[NRecoPFPs]/O");
+    fTree->Branch("RecoPFPTrueEnergyEDep", fRecoPFPTrueEnergyEDep, "RecoPFPTrueEnergyEDep[NRecoPFPs]/D");
+    fTree->Branch("RecoPFPTrueMomX", fRecoPFPTrueMomX,"RecoPFPTrueMomX[NRecoPFPs]/D");
+    fTree->Branch("RecoPFPTrueMomY", fRecoPFPTrueMomY,"RecoPFPTrueMomY[NRecoPFPs]/D");
+    fTree->Branch("RecoPFPTrueMomZ", fRecoPFPTrueMomZ,"RecoPFPTrueMomZ[NRecoPFPs]/D");
+    fTree->Branch("RecoPFPTrueMomT", fRecoPFPTrueMomT,"RecoPFPTrueMomT[NRecoPFPs]/D");
+    fTree->Branch("RecoPFPTrueStartX", fRecoPFPTrueStartX,"RecoPFPTrueStartX[NRecoPFPs]/D");
+    fTree->Branch("RecoPFPTrueStartY", fRecoPFPTrueStartY,"RecoPFPTrueStartY[NRecoPFPs]/D");
+    fTree->Branch("RecoPFPTrueStartZ", fRecoPFPTrueStartZ,"RecoPFPTrueStartZ[NRecoPFPs]/D");
+    fTree->Branch("RecoPFPTrueEndX", fRecoPFPTrueEndX,"RecoPFPTrueEndX[NRecoPFPs]/D");
+    fTree->Branch("RecoPFPTrueEndY", fRecoPFPTrueEndY,"RecoPFPTrueEndY[NRecoPFPs]/D");
+    fTree->Branch("RecoPFPTrueEndZ", fRecoPFPTrueEndZ,"RecoPFPTrueEndZ[NRecoPFPs]/D");
     // Reco
     fTree->Branch("RecoPFPSelf", fRecoPFPSelf, "RecoPFPSelf[NRecoPFPs]/I");
     fTree->Branch("RecoPFPIsPrimary", fRecoPFPIsPrimary, "RecoPFPIsPrimary[NRecoPFPs]/O");
     fTree->Branch("RecoPFPTrackShowerScore", fRecoPFPTrackShowerScore, "RecoPFPTrackShowerScore[NRecoPFPs]/D");
     fTree->Branch("RecoPFPTrackShowerPDG", fRecoPFPTrackShowerPDG, "RecoPFPTrackShowerPDG[NRecoPFPs]/I");
-    fTree->Branch("RecoPFPRecoNHits",fRecoPFPRecoNHits,"RecoPFPRecoNHits[NRecoPFPs]/I");
+    fTree->Branch("RecoPFPRecoNHits", fRecoPFPRecoNHits,"RecoPFPRecoNHits[NRecoPFPs]/I");
     fTree->Branch("RecoPFPShowerFitSuccess", fRecoPFPShowerFitSuccess, "RecoPFPShowerFitSuccess[NRecoPFPs]/I");
     fTree->Branch("RecoPFPTrackFitSuccess", fRecoPFPTrackFitSuccess, "RecoPFPTrackFitSuccess[NRecoPFPs]/I");
-    fTree->Branch("RecoPFPRecoCompleteness",fRecoPFPRecoCompleteness,"RecoPFPRecoCompleteness[NRecoPFPs]/D");
-    fTree->Branch("RecoPFPRecoHitPurity",fRecoPFPRecoHitPurity,"RecoPFPRecoHitPurity[NRecoPFPs]/D");
-    fTree->Branch("RecoPFPRecoCharge",fRecoPFPRecoCharge,"RecoPFPRecoCharge[NRecoPFPs]/D");
-    fTree->Branch("RecoPFPRecoVertexX",fRecoPFPRecoVertexX,"RecoPFPRecoVertexX[NRecoPFPs]/D");
-    fTree->Branch("RecoPFPRecoVertexY",fRecoPFPRecoVertexY,"RecoPFPRecoVertexY[NRecoPFPs]/D");
-    fTree->Branch("RecoPFPRecoVertexZ",fRecoPFPRecoVertexZ,"RecoPFPRecoVertexZ[NRecoPFPs]/D");
-    fTree->Branch("RecoPFPRecoNChildPFP",fRecoPFPRecoNChildPFP,"RecoPFPRecoNChildPFP[NRecoPFPs]/I");
-    fTree->Branch("RecoPFPRecoNChildTrackPFP",fRecoPFPRecoNChildTrackPFP,"RecoPFPRecoNChildTrackPFP[NRecoPFPs]/I");
-    fTree->Branch("RecoPFPRecoNChildShowerPFP",fRecoPFPRecoNChildShowerPFP,"RecoPFPRecoNChildShowerPFP[NRecoPFPs]/I");
+    fTree->Branch("RecoPFPRecoCompleteness", fRecoPFPRecoCompleteness,"RecoPFPRecoCompleteness[NRecoPFPs]/D");
+    fTree->Branch("RecoPFPRecoHitPurity", fRecoPFPRecoHitPurity,"RecoPFPRecoHitPurity[NRecoPFPs]/D");
+    fTree->Branch("RecoPFPRecoCharge", fRecoPFPRecoCharge,"RecoPFPRecoCharge[NRecoPFPs]/D");
+    fTree->Branch("RecoPFPRecoVertexX", fRecoPFPRecoVertexX,"RecoPFPRecoVertexX[NRecoPFPs]/D");
+    fTree->Branch("RecoPFPRecoVertexY", fRecoPFPRecoVertexY,"RecoPFPRecoVertexY[NRecoPFPs]/D");
+    fTree->Branch("RecoPFPRecoVertexZ", fRecoPFPRecoVertexZ,"RecoPFPRecoVertexZ[NRecoPFPs]/D");
+    fTree->Branch("RecoPFPRecoNChildPFP", fRecoPFPRecoNChildPFP,"RecoPFPRecoNChildPFP[NRecoPFPs]/I");
+    fTree->Branch("RecoPFPRecoNChildTrackPFP", fRecoPFPRecoNChildTrackPFP,"RecoPFPRecoNChildTrackPFP[NRecoPFPs]/I");
+    fTree->Branch("RecoPFPRecoNChildShowerPFP", fRecoPFPRecoNChildShowerPFP,"RecoPFPRecoNChildShowerPFP[NRecoPFPs]/I");
     // DeepPan
     fTree->Branch("RecoPFPDeepPanMuVar", fRecoPFPDeepPanMuVar, "RecoPFPDeepPanMuVar[NRecoPFPs]/D");
     fTree->Branch("RecoPFPDeepPanPiVar", fRecoPFPDeepPanPiVar, "RecoPFPDeepPanPiVar[NRecoPFPs]/D");
@@ -559,26 +582,26 @@ void FDSelection::CCNuSelection::beginJob()
     // Track Info
     ////////////////////////////
     // Reco
-    fTree->Branch("RecoTrackRecoStartX",fRecoTrackRecoStartX,"RecoTrackRecoStartX[NRecoPFPs]/D");
-    fTree->Branch("RecoTrackRecoStartY",fRecoTrackRecoStartY,"RecoTrackRecoStartY[NRecoPFPs]/D");
-    fTree->Branch("RecoTrackRecoStartZ",fRecoTrackRecoStartZ,"RecoTrackRecoStartZ[NRecoPFPs]/D");
-    fTree->Branch("RecoTrackRecoEndX",fRecoTrackRecoEndX,"RecoTrackRecoEndX[NRecoPFPs]/D");
-    fTree->Branch("RecoTrackRecoEndY",fRecoTrackRecoEndY,"RecoTrackRecoEndY[NRecoPFPs]/D");
-    fTree->Branch("RecoTrackRecoEndZ",fRecoTrackRecoEndZ,"RecoTrackRecoEndZ[NRecoPFPs]/D");
-    fTree->Branch("RecoTrackRecoUpstreamX",fRecoTrackRecoUpstreamX,"RecoTrackRecoUpstreamX[NRecoPFPs]/D");
-    fTree->Branch("RecoTrackRecoUpstreamY",fRecoTrackRecoUpstreamY,"RecoTrackRecoUpstreamY[NRecoPFPs]/D");
-    fTree->Branch("RecoTrackRecoUpstreamZ",fRecoTrackRecoUpstreamZ,"RecoTrackRecoUpstreamZ[NRecoPFPs]/D");
-    fTree->Branch("RecoTrackRecoDownstreamX",fRecoTrackRecoDownstreamX,"RecoTrackRecoDownstreamX[NRecoPFPs]/D");
-    fTree->Branch("RecoTrackRecoDownstreamY",fRecoTrackRecoDownstreamY,"RecoTrackRecoDownstreamY[NRecoPFPs]/D");
-    fTree->Branch("RecoTrackRecoDownstreamZ",fRecoTrackRecoDownstreamZ,"RecoTrackRecoDownstreamZ[NRecoPFPs]/D");
-    fTree->Branch("RecoTrackRecoEndClosestToVertexX",fRecoTrackRecoEndClosestToVertexX,"RecoTrackRecoEndClosestToVertexX[NRecoPFPs]/D");
-    fTree->Branch("RecoTrackRecoEndClosestToVertexY",fRecoTrackRecoEndClosestToVertexY,"RecoTrackRecoEndClosestToVertexY[NRecoPFPs]/D");
-    fTree->Branch("RecoTrackRecoEndClosestToVertexZ",fRecoTrackRecoEndClosestToVertexZ,"RecoTrackRecoEndClosestToVertexZ[NRecoPFPs]/D");
-    fTree->Branch("RecoTrackRecoLength",fRecoTrackRecoLength,"RecoTrackRecoLength[NRecoPFPs]/D");
-    fTree->Branch("RecoTrackRecoContained",fRecoTrackRecoContained,"RecoTrackRecoContained[NRecoPFPs]/I");
-    fTree->Branch("RecoTrackRecoMomMethod",fRecoTrackRecoMomMethod,"RecoTrackRecoMomMethod[NRecoPFPs]/I");
-    fTree->Branch("RecoTrackRecoMomMCS",fRecoTrackRecoMomMCS,"RecoTrackRecoMomMCS[NRecoPFPs]/D");
-    fTree->Branch("RecoTrackRecoMomRange",fRecoTrackRecoMomRange,"RecoTrackRecoMomRange[NRecoPFPs]/D");
+    fTree->Branch("RecoTrackRecoStartX", fRecoTrackRecoStartX, "RecoTrackRecoStartX[NRecoPFPs]/D");
+    fTree->Branch("RecoTrackRecoStartY", fRecoTrackRecoStartY, "RecoTrackRecoStartY[NRecoPFPs]/D");
+    fTree->Branch("RecoTrackRecoStartZ", fRecoTrackRecoStartZ, "RecoTrackRecoStartZ[NRecoPFPs]/D");
+    fTree->Branch("RecoTrackRecoEndX", fRecoTrackRecoEndX, "RecoTrackRecoEndX[NRecoPFPs]/D");
+    fTree->Branch("RecoTrackRecoEndY", fRecoTrackRecoEndY, "RecoTrackRecoEndY[NRecoPFPs]/D");
+    fTree->Branch("RecoTrackRecoEndZ", fRecoTrackRecoEndZ, "RecoTrackRecoEndZ[NRecoPFPs]/D");
+    fTree->Branch("RecoTrackRecoUpstreamX", fRecoTrackRecoUpstreamX, "RecoTrackRecoUpstreamX[NRecoPFPs]/D");
+    fTree->Branch("RecoTrackRecoUpstreamY", fRecoTrackRecoUpstreamY, "RecoTrackRecoUpstreamY[NRecoPFPs]/D");
+    fTree->Branch("RecoTrackRecoUpstreamZ", fRecoTrackRecoUpstreamZ, "RecoTrackRecoUpstreamZ[NRecoPFPs]/D");
+    fTree->Branch("RecoTrackRecoDownstreamX", fRecoTrackRecoDownstreamX, "RecoTrackRecoDownstreamX[NRecoPFPs]/D");
+    fTree->Branch("RecoTrackRecoDownstreamY", fRecoTrackRecoDownstreamY, "RecoTrackRecoDownstreamY[NRecoPFPs]/D");
+    fTree->Branch("RecoTrackRecoDownstreamZ", fRecoTrackRecoDownstreamZ, "RecoTrackRecoDownstreamZ[NRecoPFPs]/D");
+    fTree->Branch("RecoTrackRecoEndClosestToVertexX", fRecoTrackRecoEndClosestToVertexX, "RecoTrackRecoEndClosestToVertexX[NRecoPFPs]/D");
+    fTree->Branch("RecoTrackRecoEndClosestToVertexY", fRecoTrackRecoEndClosestToVertexY, "RecoTrackRecoEndClosestToVertexY[NRecoPFPs]/D");
+    fTree->Branch("RecoTrackRecoEndClosestToVertexZ", fRecoTrackRecoEndClosestToVertexZ, "RecoTrackRecoEndClosestToVertexZ[NRecoPFPs]/D");
+    fTree->Branch("RecoTrackRecoLength", fRecoTrackRecoLength, "RecoTrackRecoLength[NRecoPFPs]/D");
+    fTree->Branch("RecoTrackRecoContained", fRecoTrackRecoContained, "RecoTrackRecoContained[NRecoPFPs]/I");
+    fTree->Branch("RecoTrackRecoMomMethod", fRecoTrackRecoMomMethod, "RecoTrackRecoMomMethod[NRecoPFPs]/I");
+    fTree->Branch("RecoTrackRecoMomMCS", fRecoTrackRecoMomMCS, "RecoTrackRecoMomMCS[NRecoPFPs]/D");
+    fTree->Branch("RecoTrackRecoMomRange", fRecoTrackRecoMomRange, "RecoTrackRecoMomRange[NRecoPFPs]/D");
     // Pandizzle
     fTree->Branch("RecoTrackMichelNHits", fRecoTrackMichelNHits, "RecoTrackMichelNHits[NRecoPFPs]/D");
     fTree->Branch("RecoTrackMichelElectronMVA", fRecoTrackMichelElectronMVA, "RecoTrackMichelElectronMVA[NRecoPFPs]/D");
@@ -606,18 +629,18 @@ void FDSelection::CCNuSelection::beginJob()
     // Shower Info
     ///////////////////////////
     // Reco
-    fTree->Branch("RecoShowerRecoStartX",fRecoShowerRecoStartX,"RecoShowerRecoStartX[NRecoPFPs]/D");
-    fTree->Branch("RecoShowerRecoStartY",fRecoShowerRecoStartY,"RecoShowerRecoStartY[NRecoPFPs]/D");
-    fTree->Branch("RecoShowerRecoStartZ",fRecoShowerRecoStartZ,"RecoShowerRecoStartZ[NRecoPFPs]/D");
-    fTree->Branch("RecoShowerRecoDirX",fRecoShowerRecoDirX,"RecoShowerRecoDirX[NRecoPFPs]/D");
-    fTree->Branch("RecoShowerRecoDirY",fRecoShowerRecoDirY,"RecoShowerRecoDirY[NRecoPFPs]/D");
-    fTree->Branch("RecoShowerRecoDirZ",fRecoShowerRecoDirZ,"RecoShowerRecoDirZ[NRecoPFPs]/D");
-    fTree->Branch("RecoShowerRecoLength",&fRecoShowerRecoLength,"RecoShowerRecoLength[NRecoPFPs]/D");
-    fTree->Branch("RecoShowerRecoOpeningAngle",&fRecoShowerRecoOpeningAngle,"RecoShowerRecoOpeningAngle[NRecoPFPs]/D");
-    fTree->Branch("RecoShowerRecodEdx",fRecoShowerRecodEdx,"RecoShowerRecodEdx[NRecoPFPs][3]/D");
-    fTree->Branch("RecoShowerRecoBestPlane",&fRecoShowerRecoBestPlane,"RecoShowerRecoBestPlane[NRecoPFPs]/I");
-    fTree->Branch("RecoShowerRecoMom",fRecoShowerRecoMom,"RecoShowerRecoMom[NRecoPFPs]/D");
-    fTree->Branch("RecoShowerRecoEnergy",fRecoShowerRecoEnergy,"RecoShowerRecoEnergy[NRecoPFPs][3]/D");
+    fTree->Branch("RecoShowerRecoStartX", fRecoShowerRecoStartX, "RecoShowerRecoStartX[NRecoPFPs]/D");
+    fTree->Branch("RecoShowerRecoStartY", fRecoShowerRecoStartY, "RecoShowerRecoStartY[NRecoPFPs]/D");
+    fTree->Branch("RecoShowerRecoStartZ", fRecoShowerRecoStartZ, "RecoShowerRecoStartZ[NRecoPFPs]/D");
+    fTree->Branch("RecoShowerRecoDirX", fRecoShowerRecoDirX, "RecoShowerRecoDirX[NRecoPFPs]/D");
+    fTree->Branch("RecoShowerRecoDirY", fRecoShowerRecoDirY, "RecoShowerRecoDirY[NRecoPFPs]/D");
+    fTree->Branch("RecoShowerRecoDirZ", fRecoShowerRecoDirZ, "RecoShowerRecoDirZ[NRecoPFPs]/D");
+    fTree->Branch("RecoShowerRecoLength", &fRecoShowerRecoLength, "RecoShowerRecoLength[NRecoPFPs]/D");
+    fTree->Branch("RecoShowerRecoOpeningAngle", &fRecoShowerRecoOpeningAngle, "RecoShowerRecoOpeningAngle[NRecoPFPs]/D");
+    fTree->Branch("RecoShowerRecodEdx", fRecoShowerRecodEdx, "RecoShowerRecodEdx[NRecoPFPs][3]/D");
+    fTree->Branch("RecoShowerRecoBestPlane", &fRecoShowerRecoBestPlane, "RecoShowerRecoBestPlane[NRecoPFPs]/I");
+    fTree->Branch("RecoShowerRecoMom", fRecoShowerRecoMom, "RecoShowerRecoMom[NRecoPFPs]/D");
+    fTree->Branch("RecoShowerRecoEnergy", fRecoShowerRecoEnergy, "RecoShowerRecoEnergy[NRecoPFPs][3]/D");
     // Pandrizzle
     fTree->Branch("RecoShowerPandrizzleConnectionBDTScore", &fRecoShowerPandrizzleConnectionBDTScore, "RecoShowerPandrizzleConnectionBDTScore[NRecoPFPs]/D");
     fTree->Branch("RecoShowerPandrizzlePathwayLengthMin", &fRecoShowerPandrizzlePathwayLengthMin, "RecoShowerPandrizzlePathwayLengthMin[NRecoPFPs]/D");
@@ -639,19 +662,19 @@ void FDSelection::CCNuSelection::beginJob()
     fTree->Branch("RecoShowerPandrizzleMinLargestProjectedGapSize", &fRecoShowerPandrizzleMinLargestProjectedGapSize, "RecoShowerPandrizzleMinLargestProjectedGapSize[NRecoPFPs]/D");
     fTree->Branch("RecoShowerPandrizzleNViewsWithAmbiguousHits", &fRecoShowerPandrizzleNViewsWithAmbiguousHits, "RecoShowerPandrizzleNViewsWithAmbiguousHits[NRecoPFPs]/D");
     fTree->Branch("RecoShowerPandrizzleAmbiguousHitMaxUnaccountedEnergy", &fRecoShowerPandrizzleAmbiguousHitMaxUnaccountedEnergy, "RecoShowerPandrizzleAmbiguousHitMaxUnaccountedEnergy[NRecoPFPs]/D");
-    fTree->Branch("RecoShowerPandrizzleEvalRatio",&fRecoShowerPandrizzleEvalRatio,"RecoShowerPandrizzleEvalRatio[NRecoPFPs]/D");
-    fTree->Branch("RecoShowerPandrizzleConcentration",&fRecoShowerPandrizzleConcentration,"RecoShowerPandrizzleConcentration[NRecoPFPs]/D");
-    fTree->Branch("RecoShowerPandrizzleCoreHaloRatio",&fRecoShowerPandrizzleCoreHaloRatio, "RecoShowerPandrizzleCoreHaloRatio[NRecoPFPs]/D");
-    fTree->Branch("RecoShowerPandrizzleConicalness",&fRecoShowerPandrizzleConicalness, "RecoShowerPandrizzleConicalness[NRecoPFPs]/D");
-    fTree->Branch("RecoShowerPandrizzledEdxBestPlane",&fRecoShowerPandrizzledEdxBestPlane, "RecoShowerPandrizzledEdxBestPlane[NRecoPFPs]/D");
-    fTree->Branch("RecoShowerPandrizzleDisplacement",&fRecoShowerPandrizzleDisplacement, "RecoShowerPandrizzleDisplacement[NRecoPFPs]/D");
-    fTree->Branch("RecoShowerPandrizzleDCA",&fRecoShowerPandrizzleDCA, "RecoShowerPandrizzleDCA[NRecoPFPs]/D");
-    fTree->Branch("RecoShowerPandrizzleWideness",&fRecoShowerPandrizzleWideness, "RecoShowerPandrizzleWideness[NRecoPFPs]/D");
-    fTree->Branch("RecoShowerPandrizzleEnergyDensity",&fRecoShowerPandrizzleEnergyDensity, "RecoShowerPandrizzleEnergyDensity[NRecoPFPs]/D");
+    fTree->Branch("RecoShowerPandrizzleEvalRatio", &fRecoShowerPandrizzleEvalRatio, "RecoShowerPandrizzleEvalRatio[NRecoPFPs]/D");
+    fTree->Branch("RecoShowerPandrizzleConcentration", &fRecoShowerPandrizzleConcentration, "RecoShowerPandrizzleConcentration[NRecoPFPs]/D");
+    fTree->Branch("RecoShowerPandrizzleCoreHaloRatio", &fRecoShowerPandrizzleCoreHaloRatio, "RecoShowerPandrizzleCoreHaloRatio[NRecoPFPs]/D");
+    fTree->Branch("RecoShowerPandrizzleConicalness", &fRecoShowerPandrizzleConicalness, "RecoShowerPandrizzleConicalness[NRecoPFPs]/D");
+    fTree->Branch("RecoShowerPandrizzledEdxBestPlane", &fRecoShowerPandrizzledEdxBestPlane, "RecoShowerPandrizzledEdxBestPlane[NRecoPFPs]/D");
+    fTree->Branch("RecoShowerPandrizzleDisplacement", &fRecoShowerPandrizzleDisplacement, "RecoShowerPandrizzleDisplacement[NRecoPFPs]/D");
+    fTree->Branch("RecoShowerPandrizzleDCA", &fRecoShowerPandrizzleDCA, "RecoShowerPandrizzleDCA[NRecoPFPs]/D");
+    fTree->Branch("RecoShowerPandrizzleWideness", &fRecoShowerPandrizzleWideness, "RecoShowerPandrizzleWideness[NRecoPFPs]/D");
+    fTree->Branch("RecoShowerPandrizzleEnergyDensity", &fRecoShowerPandrizzleEnergyDensity, "RecoShowerPandrizzleEnergyDensity[NRecoPFPs]/D");
     fTree->Branch("RecoShowerPandrizzleBDTMethod", &fRecoShowerPandrizzleBDTMethod, "RecoShowerPandrizzleBDTMethod[NRecoPFPs]/D");
-    fTree->Branch("RecoShowerEnhancedPandrizzleScore",&fRecoShowerEnhancedPandrizzleScore, "RecoShowerEnhancedPandrizzleScore[NRecoPFPs]/D"); 
-    fTree->Branch("RecoShowerBackupPandrizzleScore",&fRecoShowerBackupPandrizzleScore, "RecoShowerBackupPandrizzleScore[NRecoPFPs]/D");
-    fTree->Branch("RecoShowerPandrizzleIsFilled",&fRecoShowerPandrizzleIsFilled, "RecoShowerPandrizzleIsFilled[NRecoPFPs]/O");
+    fTree->Branch("RecoShowerEnhancedPandrizzleScore", &fRecoShowerEnhancedPandrizzleScore, "RecoShowerEnhancedPandrizzleScore[NRecoPFPs]/D"); 
+    fTree->Branch("RecoShowerBackupPandrizzleScore", &fRecoShowerBackupPandrizzleScore, "RecoShowerBackupPandrizzleScore[NRecoPFPs]/D");
+    fTree->Branch("RecoShowerPandrizzleIsFilled", &fRecoShowerPandrizzleIsFilled, "RecoShowerPandrizzleIsFilled[NRecoPFPs]/O");
     fTree->Branch("RecoShowerPandrizzleModularPathwayLength", &fRecoShowerPandrizzleModularPathwayLength, "RecoShowerPandrizzleModularPathwayLength[NRecoPFPs]/D");
     fTree->Branch("RecoShowerPandrizzleModularNuVertexChargeWeightedMeanRadialDistance", &fRecoShowerPandrizzleModularNuVertexChargeWeightedMeanRadialDistance, "RecoShowerPandrizzleModularNuVertexChargeWeightedMeanRadialDistance[NRecoPFPs]/D");
     fTree->Branch("RecoShowerPandrizzleModularMaxNShowerHits", &fRecoShowerPandrizzleModularMaxNShowerHits, "RecoShowerPandrizzleModularMaxNShowerHits[NRecoPFPs]/D");
@@ -675,7 +698,6 @@ void FDSelection::CCNuSelection::beginSubRun(art::SubRun const & sr)
 
 void FDSelection::CCNuSelection::endSubRun(const art::SubRun& sr)
 {
-    std::cout << "HELLO" << std::endl;
   fRun = sr.run();
   fSubRun = sr.subRun();
 
@@ -684,12 +706,10 @@ void FDSelection::CCNuSelection::endSubRun(const art::SubRun& sr)
 
   if (sr.getByLabel(fPOTModuleLabel, potListHandle))
   {
-      std::cout << "AAAAA" << std::endl;
     fPOT = potListHandle->totpot;
   }
   else
   {
-      std::cout << "BBBBBB" << std::endl;
     fPOT = 0.;
   }
 
@@ -706,6 +726,8 @@ void FDSelection::CCNuSelection::endJob()
 
 void FDSelection::CCNuSelection::Reset()
 {
+    fTrueEnergyCalc.Reset();
+
     ////////////////////////////
     // Event info
     ////////////////////////////
@@ -724,6 +746,7 @@ void FDSelection::CCNuSelection::Reset()
     fTargetZ = kDefInt;
     fQ2 = kDefDoub; 
     fENu = kDefDoub; 
+    fTrueNuEnergyEDep = kDefDoub;
     fW = kDefDoub; 
     fX = kDefDoub;
     fY = kDefDoub;
@@ -737,6 +760,7 @@ void FDSelection::CCNuSelection::Reset()
     fNuT = kDefDoub;
     fLepPDG = kDefInt;
     fLepEnergy = kDefDoub;
+    fTrueLepEnergyEDep = kDefDoub;
     fMomLepX = kDefDoub;
     fMomLepY = kDefDoub;
     fMomLepZ = kDefDoub;
@@ -756,6 +780,12 @@ void FDSelection::CCNuSelection::Reset()
     fFinalMomTranMagNoLepWithRem = kDefDoub;
     fFinalMomTranMagWithLepNoRem = kDefDoub;
     fFinalMomTranMagWithLepWithRem = kDefDoub;
+    fTrueEnergyDepX_Inner.clear();
+    fTrueEnergyDepY_Inner.clear();
+    fTrueEnergyDepZ_Inner.clear();
+    fTrueEnergyDepX_Outer.clear();
+    fTrueEnergyDepY_Outer.clear();
+    fTrueEnergyDepZ_Outer.clear();
     ////////////////////////////
     // Event-level reco info 
     ////////////////////////////
@@ -794,7 +824,9 @@ void FDSelection::CCNuSelection::Reset()
         ////////////////////////////  
         // Truth
         fRecoPFPTruePDG[i] = kDefInt;
+        fRecoPFPTrueTrackID[i] = kDefInt;
         fRecoPFPTruePrimary[i] = false;
+        fRecoPFPTrueEnergyEDep[i] = kDefDoub;
         fRecoPFPTrueMomX[i] = kDefDoub;
         fRecoPFPTrueMomY[i] = kDefDoub;
         fRecoPFPTrueMomZ[i] = kDefDoub;
@@ -979,6 +1011,40 @@ void FDSelection::CCNuSelection::GetEventInfo(art::Event const & evt)
 
 void FDSelection::CCNuSelection::GetTruthInfo(art::Event const & evt)
 {
+    fTrueEnergyCalc.InitialiseCalc(evt);
+
+    // Investigating stuff...
+    //////////////////////////////////////////////////////////////////////////////////
+    // Get the 'inner' sim energy deposit positions
+    art::Handle<std::vector<sim::SimEnergyDeposit>> simEDepHandle_inner;
+    std::vector<art::Ptr<sim::SimEnergyDeposit>> simEDepVector_inner;
+
+    if (evt.getByLabel("largeant:LArG4DetectorServicevolTPCActiveInner", simEDepHandle_inner))
+        art::fill_ptr_vector(simEDepVector_inner, simEDepHandle_inner);
+
+    for (const art::Ptr<sim::SimEnergyDeposit> &simEDep : simEDepVector_inner)
+    {
+        fTrueEnergyDepX_Inner.push_back(simEDep->X());
+        fTrueEnergyDepY_Inner.push_back(simEDep->Y());
+        fTrueEnergyDepZ_Inner.push_back(simEDep->Z());
+    }
+
+    // Get the 'outer' sim energy deposit positions
+    art::Handle<std::vector<sim::SimEnergyDeposit>> simEDepHandle_outer;
+    std::vector<art::Ptr<sim::SimEnergyDeposit>> simEDepVector_outer;
+
+    if (evt.getByLabel("largeant:LArG4DetectorServicevolTPCActiveOuter", simEDepHandle_outer))
+        art::fill_ptr_vector(simEDepVector_outer, simEDepHandle_outer);
+
+    for (const art::Ptr<sim::SimEnergyDeposit> &simEDep : simEDepVector_outer)
+    {
+        fTrueEnergyDepX_Outer.push_back(simEDep->X());
+        fTrueEnergyDepY_Outer.push_back(simEDep->Y());
+        fTrueEnergyDepZ_Outer.push_back(simEDep->Z());
+    }
+    //////////////////////////////////////////////////////////////////////////////////
+
+
     const std::vector<art::Ptr<simb::MCTruth>> mcTruths = dune_ana::DUNEAnaEventUtils::GetMCTruths(evt, fNuGenModuleLabel);
 
     if (mcTruths.empty())
@@ -1006,6 +1072,7 @@ void FDSelection::CCNuSelection::GetTruthInfo(art::Event const & evt)
     fMode = mcNeutrino.Mode(); //0=QE/El, 1=RES, 2=DIS, 3=Coherent production
     fTargetZ = mcNeutrino.Target()%100000000/10000;
     fENu = mcNeutrino.Nu().E();
+    fTrueNuEnergyEDep = fTrueEnergyCalc.GetTrueNuEnergy();
     fQ2 = mcNeutrino.QSqr();
     fW = mcNeutrino.W();
     fX = mcNeutrino.X();
@@ -1023,6 +1090,7 @@ void FDSelection::CCNuSelection::GetTruthInfo(art::Event const & evt)
     const simb::MCParticle &mcLepton = mcNeutrino.Lepton();
     fLepPDG = mcLepton.PdgCode();
     fLepEnergy = mcLepton.E();
+    fTrueLepEnergyEDep = fTrueEnergyCalc.GetTrueParticleEnergy(mcLepton.TrackId());
     fMomLepX = mcLepton.Momentum().X();
     fMomLepY = mcLepton.Momentum().Y();
     fMomLepZ = mcLepton.Momentum().Z();
@@ -1231,23 +1299,26 @@ void FDSelection::CCNuSelection::FillPFParticleInfo(art::Event const & evt)
         FillChildPFPInformation(pfp, evt, fRecoPFPRecoNChildPFP[pfpIndex], fRecoPFPRecoNChildTrackPFP[pfpIndex], fRecoPFPRecoNChildShowerPFP[pfpIndex]);
 
         int g4id = TruthMatchUtils::TrueParticleIDFromTotalRecoHits(clockData, pfpHits, 1);
-        fRecoPFPRecoCompleteness[pfpIndex] = FDSelectionUtils::CompletenessFromTrueParticleID(clockData, pfpHits, eventHitList, g4id);
-        fRecoPFPRecoHitPurity[pfpIndex] = FDSelectionUtils::HitPurityFromTrueParticleID(clockData, pfpHits, g4id);
 
         if (TruthMatchUtils::Valid(g4id))
         {
+            fRecoPFPRecoCompleteness[pfpIndex] = FDSelectionUtils::CompletenessFromTrueParticleID(clockData, pfpHits, eventHitList, g4id);
+            fRecoPFPRecoHitPurity[pfpIndex] = FDSelectionUtils::HitPurityFromTrueParticleID(clockData, pfpHits, g4id);
+
             art::ServiceHandle<cheat::ParticleInventoryService> pi_serv;
             const simb::MCParticle* matched_mcparticle = pi_serv->ParticleList().at(g4id);
 
             if (matched_mcparticle)
             {
                 fRecoPFPTruePDG[pfpIndex] = matched_mcparticle->PdgCode();
+                fRecoPFPTrueTrackID[pfpIndex] = matched_mcparticle->TrackId();
 
                 if (matched_mcparticle->Mother() == 0) 
                     fRecoPFPTruePrimary[pfpIndex] = true;
                 else 
                     fRecoPFPTruePrimary[pfpIndex] = false;
 
+                fRecoPFPTrueEnergyEDep[pfpIndex] = fTrueEnergyCalc.GetTrueParticleEnergy(matched_mcparticle->TrackId());
                 fRecoPFPTrueMomX[pfpIndex] = matched_mcparticle->Momentum().X();
                 fRecoPFPTrueMomY[pfpIndex] = matched_mcparticle->Momentum().Y();
                 fRecoPFPTrueMomZ[pfpIndex] = matched_mcparticle->Momentum().Z();
@@ -1289,7 +1360,7 @@ void FDSelection::CCNuSelection::FillPFParticleInfo(art::Event const & evt)
         std::cout << "ivysaurusScores.m_otherScore: " << ivysaurusScores.m_otherScore << std::endl; 
         */
 
-        // Fill the track information
+        // Fill the track & shower information
         FillRecoTrackInfo(evt, pfp, pfpIndex);
         FillRecoShowerInfo(evt, pfp, pfpIndex);
     }
