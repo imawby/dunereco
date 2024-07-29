@@ -65,6 +65,7 @@
 #include "dunereco/FDSelections/EnergyReco/TrueEnergyCalc.h"
 #include "dunereco/FDSelections/pandizzle/PandizzleAlg.h"
 #include "dunereco/FDSelections/pandrizzle/PandrizzleAlg.h"
+#include "dunereco/FDSelections/HierarchyUtils.h"
 #include "FDSelectionUtils.h"
 #include "tools/RecoTrackSelector.h"
 #include "tools/RecoShowerSelector.h"
@@ -74,6 +75,7 @@ constexpr int kDefInt = -999;
 constexpr double kDefDoub = -999.0;
 constexpr int kDefMaxNTrueVertexParticles = 150;
 constexpr int kMaxPFParticles = 100;
+constexpr int kMaxParentChildLinks = (kMaxPFParticles * kMaxPFParticles);
 
 namespace FDSelection {
   class CCNuSelection;
@@ -105,6 +107,9 @@ private:
   void SetTrueGenerationInfo(art::Event const & evt, const int pfpIndex, const bool visibleMode, int &trueGeneration, int &trueParentTrackID, int &trueParentPDG);
   void FillRecoTrackInfo(art::Event const & evt, const art::Ptr<recob::PFParticle> &pfp, const int pfpCounter);
   void FillRecoShowerInfo(art::Event const & evt, const art::Ptr<recob::PFParticle> &pfp, const int pfpCounter);
+  void FillParentChildLinkInfo(art::Event const & evt);
+  void FillTrueParentChildLinkInfo(const int linkIndex, const int parentPFPIndex, const int childPFPIndex);
+  void FillRecoParentChildLinkInfo(art::Event const & evt, const art::Ptr<recob::PFParticle> childPFP, art::Ptr<recob::PFParticle> parentPFP, const int linkIndex);
   void RunTrackSelection(art::Event const & evt);
   void RunPandizzleTrackSelection();
   void RunDeepPanTrackSelection();
@@ -369,6 +374,31 @@ private:
   int fSelShowerHighestEnergySelf; 
   int fSelShowerHighestEnergyIndex;
   ////////////////////////////////////////
+  // Hierarchy Info
+  ////////////////////////////////////////
+  // Truth
+  bool fTrueParentChildLink[kMaxParentChildLinks];
+  // Reco
+  int fNParentChildLinks;
+  // Parent information
+  double fParentTrackScore[kMaxParentChildLinks];
+  double fParentBraggVariable[kMaxParentChildLinks];
+  double fParentEndRegionNHits[kMaxParentChildLinks];
+  double fParentEndRegionNParticles[kMaxParentChildLinks];
+  double fParentEndRegionRToWall[kMaxParentChildLinks];
+  // Edge information
+  double fParentPFPIndex[kMaxParentChildLinks];
+  double fChildPFPIndex[kMaxParentChildLinks];
+  double fVertexSeparation[kMaxParentChildLinks];
+  double fSeparationU[kMaxParentChildLinks];
+  double fSeparationV[kMaxParentChildLinks];
+  double fSeparationW[kMaxParentChildLinks];
+  double fSeparation3D[kMaxParentChildLinks];
+  double fEnergyRatio[kMaxParentChildLinks];
+  double fPIDLinkType[kMaxParentChildLinks];
+  double fOpeningAngle[kMaxParentChildLinks];
+  double fTrackShowerLinkType[kMaxParentChildLinks];
+  ////////////////////////////////////////
   //Module labels
   ////////////////////////////////////////
   std::string fNuGenModuleLabel;
@@ -432,34 +462,33 @@ FDSelection::CCNuSelection::CCNuSelection(fhicl::ParameterSet const & pset) :
 
 void FDSelection::CCNuSelection::analyze(art::Event const & evt)
 {
-    //std::cout << "AAAAAA" << std::endl;
+    std::cout << "AAAAAA" << std::endl;
     Reset();
-    //std::cout << "BBB" << std::endl;
+    std::cout << "BBB" << std::endl;
     fRun = evt.run();
     fSubRun = evt.subRun();
     fEvent = evt.event();
     fIsMC = !evt.isRealData();
-    //std::cout << "CCC" << std::endl;
-
-    // Get Pandora Maps
+    std::cout << "CCC" << std::endl;
     FillPandoraMaps(evt);
-    //std::cout << "DDD" << std::endl;
-    
+    std::cout << "DDD" << std::endl;
     GetEventInfo(evt);
-    //std::cout << "EEE" << std::endl;
+    std::cout << "EEE" << std::endl;
     if (fIsMC) 
         GetTruthInfo(evt);
-    //std::cout << "FFF" << std::endl;
+    std::cout << "FFF" << std::endl;
     FillVertexInfo(evt);
-    //std::cout << "GGG" << std::endl;
+    std::cout << "GGG" << std::endl;
     FillPFParticleInfo(evt);
-    //std::cout << "HHH" << std::endl;
+    std::cout << "HHH" << std::endl;
     FillHierarchyInfo(evt);
-    //std::cout << "III" << std::endl;
+    std::cout << "III" << std::endl;
+    FillParentChildLinkInfo(evt);
+    std::cout << "JJJ" << std::endl;
     RunTrackSelection(evt);
-    //std::cout << "JJJ" << std::endl;
+    std::cout << "KKK" << std::endl;
     RunShowerSelection(evt);
-    //std::cout << "KKK" << std::endl;
+    std::cout << "LLL" << std::endl;
 
     fTree->Fill();
 }
@@ -739,6 +768,31 @@ void FDSelection::CCNuSelection::beginJob()
     fTree->Branch("SelShowerIvysaurusIndex", &fSelShowerIvysaurusIndex);
     fTree->Branch("SelShowerHighestEnergySelf", &fSelShowerHighestEnergySelf);
     fTree->Branch("SelShowerHighestEnergyIndex", &fSelShowerHighestEnergyIndex);
+
+    ////////////////////////////////////////
+    // Hierarchy Info
+    ////////////////////////////////////////
+    fTree->Branch("NParentChildLinks", &fNParentChildLinks);
+    // Truth
+    fTree->Branch("TrueParentChildLink", &fTrueParentChildLink, "TrueParentChildLink[NParentChildLinks]/O");
+    // Parent information
+    fTree->Branch("ParentTrackScore", &fParentTrackScore, "ParentTrackScore[NParentChildLinks]/D");
+    fTree->Branch("ParentBraggVariable", &fParentBraggVariable, "ParentBraggVariable[NParentChildLinks]/D");
+    fTree->Branch("ParentEndRegionNHits", &fParentEndRegionNHits, "ParentEndRegionNHits[NParentChildLinks]/D");
+    fTree->Branch("ParentEndRegionNParticles", &fParentEndRegionNParticles, "ParentEndRegionNParticles[NParentChildLinks]/D");
+    fTree->Branch("ParentEndRegionRToWall", &fParentEndRegionRToWall, "ParentEndRegionRToWall[NParentChildLinks]/D");
+    // Edge information
+    fTree->Branch("ParentPFPIndex", &fParentPFPIndex, "ParentPFPIndex[NParentChildLinks]/D");
+    fTree->Branch("ChildPFPIndex", &fChildPFPIndex, "ChildPFPIndex[NParentChildLinks]/D");
+    fTree->Branch("VertexSeparation", &fVertexSeparation, "VertexSeparation[NParentChildLinks]/D");
+    fTree->Branch("SeparationU", &fSeparationU, "SeparationU[NParentChildLinks]/D");
+    fTree->Branch("SeparationV", &fSeparationV, "SeparationV[NParentChildLinks]/D");
+    fTree->Branch("SeparationW", &fSeparationW, "SeparationW[NParentChildLinks]/D");
+    fTree->Branch("Separation3D", &fSeparation3D, "Separation3D[NParentChildLinks]/D");
+    fTree->Branch("EnergyRatio", &fEnergyRatio, "EnergyRatio[NParentChildLinks]/D");
+    fTree->Branch("PIDLinkType", &fPIDLinkType, "PIDLinkType[NParentChildLinks]/D");
+    fTree->Branch("OpeningAngle", &fOpeningAngle, "OpeningAngle[NParentChildLinks]/D");
+    fTree->Branch("TrackShowerLinkType", &fTrackShowerLinkType, "TrackShowerLinkType[NParentChildLinks]/D");
 }
 
 //////////////////////////////////////////////////////////////////////////////////
@@ -1046,6 +1100,37 @@ void FDSelection::CCNuSelection::Reset()
     fSelShowerIvysaurusIndex = -1;
     fSelShowerHighestEnergySelf = -1;
     fSelShowerHighestEnergyIndex = -1;
+
+
+    ////////////////////////////////////////
+    // Hierarchy Info
+    ////////////////////////////////////////
+    // Reco
+    fNParentChildLinks = 0;
+
+    for (int i = 0; i < kMaxParentChildLinks; i++)
+    {
+        // Truth
+        fTrueParentChildLink[i] = false;
+        // Parent information
+        fParentTrackScore[i] = kDefDoub;
+        fParentBraggVariable[i] = kDefDoub;
+        fParentEndRegionNHits[i] = kDefDoub;
+        fParentEndRegionNParticles[i] = kDefDoub;
+        fParentEndRegionRToWall[i] = kDefDoub;
+        // Edge information
+        fParentPFPIndex[i] = kDefDoub;
+        fChildPFPIndex[i] = kDefDoub;
+        fVertexSeparation[i] = kDefDoub;
+        fSeparationU[i] = kDefDoub;
+        fSeparationV[i] = kDefDoub;
+        fSeparationW[i] = kDefDoub;
+        fSeparation3D[i] = kDefDoub;
+        fEnergyRatio[i] = kDefDoub;
+        fPIDLinkType[i] = kDefDoub;
+        fOpeningAngle[i] = kDefDoub;
+        fTrackShowerLinkType[i] = kDefDoub;
+    }
 }
 
 //////////////////////////////////////////////////////////////////////////////////
@@ -1549,7 +1634,6 @@ void FDSelection::CCNuSelection::FillHierarchyInfo(art::Event const & evt)
         if (pfpIndex == kMaxPFParticles)
             break;
 
-
         SetRecoGenerationInfo(evt, pfp, fRecoPFPRecoGeneration[pfpIndex], fRecoPFPRecoParentSelf[pfpIndex], fRecoPFPRecoParentPDG[pfpIndex]);
         SetTrueGenerationInfo(evt, pfpIndex, false, fRecoPFPTrueGeneration[pfpIndex], fRecoPFPTrueParentTrackID[pfpIndex], fRecoPFPTrueParentPDG[pfpIndex]);
         SetTrueGenerationInfo(evt, pfpIndex, true, fRecoPFPTrueVisibleGeneration[pfpIndex], fRecoPFPTrueVisibleParentTrackID[pfpIndex], fRecoPFPTrueVisibleParentPDG[pfpIndex]);
@@ -1604,10 +1688,6 @@ void FDSelection::CCNuSelection::SetTrueGenerationInfo(art::Event const & evt, c
 
         const art::Ptr<simb::MCParticle> currentMCParticle = fMCParticleMap.at(currentTrackID);
         currentTrackID = currentMCParticle->Mother();
-
-        std::cout << "currentMCParticle->PdgCode(): " << currentMCParticle->PdgCode() << std::endl;
-        std::cout << "currentTrackID: " << currentTrackID << std::endl;
-        std::cout << "fNuTrackID: " << fNuTrackID << std::endl;
 
         // If parent is not reconstructed, move on
         if (visibleMode && (currentTrackID != fNuTrackID))
@@ -1821,6 +1901,104 @@ void FDSelection::CCNuSelection::FillRecoShowerInfo(art::Event const & evt, cons
     fRecoShowerBackupPandrizzleScore[pfpIndex] = (std::fabs(fRecoShowerPandrizzleBDTMethod[pfpIndex] - 1.0) < std::numeric_limits<float>::epsilon()) ? pandrizzleScore : -9999.f;
     fRecoShowerEnhancedPandrizzleScore[pfpIndex] = (std::fabs(fRecoShowerPandrizzleBDTMethod[pfpIndex] - 2.0) < std::numeric_limits<float>::epsilon()) ? pandrizzleScore : -9999.f;
     fRecoShowerPandrizzleIsFilled[pfpIndex] = pandrizzleRecord.IsFilled();
+}
+
+//////////////////////////////////////////////////////////////////////////////////
+
+void FDSelection::CCNuSelection::FillParentChildLinkInfo(art::Event const & evt)
+{
+    if (!dune_ana::DUNEAnaEventUtils::HasNeutrino(evt, fRecoModuleLabel))
+        return;
+
+    std::vector<art::Ptr<recob::PFParticle>> parentPFPs = dune_ana::DUNEAnaEventUtils::GetPFParticles(evt, fRecoModuleLabel);
+    std::vector<art::Ptr<recob::PFParticle>> childPFPs = dune_ana::DUNEAnaEventUtils::GetPFParticles(evt, fRecoModuleLabel);
+
+    int parentPFPIndex = -1;
+    int linkIndex = -1;
+
+    // Loop over all particles as parents
+    for (art::Ptr<recob::PFParticle> parentPFP : parentPFPs)
+    {
+        if ((std::fabs(parentPFP->PdgCode()) == 12) || (std::fabs(parentPFP->PdgCode()) == 14) || (std::fabs(parentPFP->PdgCode()) == 16))
+            continue;
+
+        parentPFPIndex++;
+
+        if (parentPFPIndex >= kMaxPFParticles)
+            break;
+
+        // Loop over all particles as children
+        int childPFPIndex = -1;
+
+        for (art::Ptr<recob::PFParticle> childPFP : childPFPs)
+        {
+            if ((std::fabs(childPFP->PdgCode()) == 12) || (std::fabs(childPFP->PdgCode()) == 14) || (std::fabs(childPFP->PdgCode()) == 16))
+                continue;
+
+            childPFPIndex++;
+
+            if (childPFPIndex >= kMaxPFParticles)
+                break;
+
+            // Increase number of links
+            linkIndex++;
+            fNParentChildLinks++;
+
+            // Index information   
+            fParentPFPIndex[linkIndex] = parentPFPIndex;
+            fChildPFPIndex[linkIndex] = childPFPIndex;
+
+            // Fill true parent-child link info
+            FillTrueParentChildLinkInfo(linkIndex, parentPFPIndex, childPFPIndex);
+
+            // Fill reco parent-child link info
+            FillRecoParentChildLinkInfo(evt, childPFP, parentPFP, linkIndex);
+        }
+    }
+}
+
+//////////////////////////////////////////////////////////////////////////////////
+
+void FDSelection::CCNuSelection::FillTrueParentChildLinkInfo(const int linkIndex, const int parentPFPIndex, 
+    const int childPFPIndex)
+{
+    if (fRecoPFPTrueTrackID[parentPFPIndex] < 0) // no reco match for parent
+    {
+        fTrueParentChildLink[linkIndex] = false;
+    }
+    else if (fRecoPFPTrueVisibleParentTrackID[childPFPIndex] < 0) // no true parent identified 
+    {
+        fTrueParentChildLink[linkIndex] = false;
+    }
+    else if (fRecoPFPTrueVisibleParentTrackID[childPFPIndex] == fRecoPFPTrueTrackID[parentPFPIndex]) // correct child link
+    {
+        fTrueParentChildLink[linkIndex] = true;
+    }
+    else
+    {
+        fTrueParentChildLink[linkIndex] = false;
+    }
+}
+
+//////////////////////////////////////////////////////////////////////////////////
+
+void FDSelection::CCNuSelection::FillRecoParentChildLinkInfo(art::Event const & evt, const art::Ptr<recob::PFParticle> childPFP, 
+    art::Ptr<recob::PFParticle> parentPFP, const int linkIndex)
+{ 
+    // Parent information
+    fParentTrackScore[linkIndex] = HierarchyUtils::GetTrackScore(evt, parentPFP, fRecoModuleLabel);
+    fParentBraggVariable[linkIndex] = HierarchyUtils::GetBraggVariable();
+    fParentEndRegionNHits[linkIndex] = HierarchyUtils::GetEndRegionNHits();
+    fParentEndRegionNParticles[linkIndex] = HierarchyUtils::GetEndRegionNParticles();
+    fParentEndRegionRToWall[linkIndex] = HierarchyUtils::GetEndRegionRToWall();
+
+    // Edge information
+    fVertexSeparation[linkIndex] = HierarchyUtils::GetVertexSeparation();
+    fSeparation3D[linkIndex] = HierarchyUtils::GetSeparation3D();
+    fEnergyRatio[linkIndex] = HierarchyUtils::GetEnergyRatio();
+    fPIDLinkType[linkIndex] = HierarchyUtils::GetPIDLinkType();
+    fOpeningAngle[linkIndex] = HierarchyUtils::GetOpeningAngle();
+    fTrackShowerLinkType[linkIndex] = HierarchyUtils::GetTrackShowerLinkType();
 }
 
 ///////////////////////////////////////////////////////////////
