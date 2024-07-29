@@ -286,6 +286,7 @@ bool GridManager::GetStartExtremalPoints(const art::Event &evt, const art::Ptr<r
     }
     catch (...)
     {
+        std::cout << "no neutrino vertex..." << std::endl;
         return false;
     }
 
@@ -296,14 +297,17 @@ bool GridManager::GetStartExtremalPoints(const art::Event &evt, const art::Ptr<r
     const std::vector<art::Ptr<recob::SpacePoint>> spacepoints = dune_ana::DUNEAnaPFParticleUtils::GetSpacePoints(pfparticle, evt, m_recoModuleLabel); 
 
     if (spacepoints.empty())
+    {
+        std::cout << "spacepoints empty" << std::endl;
         return false;
+    }
 
     try
     {
         const art::Ptr<recob::Vertex> vertex = dune_ana::DUNEAnaPFParticleUtils::GetVertex(pfparticle, evt, m_recoModuleLabel);
 
         const TVector3 vertexPos = TVector3(vertex->position().X(), vertex->position().Y(), vertex->position().Z());
-        const float vertexL = (vertexPos - nuVertex3D_tv).Mag();
+        //const float vertexL = (vertexPos - nuVertex3D_tv).Mag();
 
         int nBins = 180;
         float angleMin = 0.f, angleMax = 2.f * M_PI;
@@ -328,12 +332,13 @@ bool GridManager::GetStartExtremalPoints(const art::Event &evt, const art::Ptr<r
             if (mag > m_gridSize3D)
                 continue;
 
-            const float spacepointL = (vertexPos - nuVertex3D_tv).Dot(displacement);
+            /*
+            const float spacepointL = (vertexPos - nuVertex3D_tv).Dot(spacepointPos - nuVertex3D_tv);
 
             // ignore hits that are between the pfp vertex and spacepoint?
             if (spacepointL < vertexL)
                 continue;
-
+            */
             const float magXZ = sqrt((displacement.X() * displacement.X()) + (displacement.Z() * displacement.Z()));
 
             float theta0YZ = (mag < std::numeric_limits<float>::epsilon()) ? 0.f : 
@@ -373,7 +378,10 @@ bool GridManager::GetStartExtremalPoints(const art::Event &evt, const art::Ptr<r
         }
 
         if ((bestTheta0YZBin < 0) || (bestTheta0XZBin < 0))
+        {
+            std::cout << "bin issue" << std::endl;
             return false;
+        }
 
         const float bestTheta0YZ = angleMin + ((static_cast<float>(bestTheta0YZBin) + 0.5f) * binWidth);
         const float bestTheta0XZ = angleMin + ((static_cast<float>(bestTheta0XZBin) + 0.5f) * binWidth);
