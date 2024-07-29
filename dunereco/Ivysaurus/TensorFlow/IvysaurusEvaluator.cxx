@@ -110,21 +110,17 @@ ivysaurus::IvysaurusEvaluator::IvysaurusScores ivysaurus::IvysaurusEvaluator::Iv
     std::cout << "Making the track variable tensors..." << std::endl;
     tensorflow::Tensor trackVarTensor = ObtainInputTrackTensor(evt, pfparticle);
 
-    /*
     auto trackVarTensorMap = trackVarTensor.tensor<float, 2>();
     for (int i = 0; i < m_nTrackVars; ++i)
         std::cout << "trackVarTensorMap(0, i): " << trackVarTensorMap(0, i) << std::endl;
-    */
 
     // Obtain the input shower variable tensors
     std::cout << "Making the shower variable tensors..." << std::endl;
     tensorflow::Tensor showerVarTensor = ObtainInputShowerTensor(evt, pfparticle);
 
-    /*
     auto showerVarTensorMap = showerVarTensor.tensor<float, 2>();
     for (int i = 0; i < m_nShowerVars; ++i)
         std::cout << "showerVarTensorMap(0, i): " << showerVarTensorMap(0, i) << std::endl;
-    */
 
     // Link the data with some tags so tensorflow know where to put those data entries.
     std::cout << "Hooking up input/output layers..." << std::endl;
@@ -200,12 +196,20 @@ tensorflow::Tensor ivysaurus::IvysaurusEvaluator::ObtainInputGridTensor(const ar
 
     tensorflow::Tensor gridTensor(tensorflow::DT_FLOAT, tensorflow::TensorShape({ 1, grid.GetAxisDimensions(), grid.GetAxisDimensions(), 1 }));
 
+    std::cout << "grid elements: " << std::endl;
+    std::cout << "grid.GetAxisDimensions(): " << grid.GetAxisDimensions() << std::endl;
+
     // Fill the tensors
     auto tensorMap = gridTensor.tensor<float, 4>();
 
     for (unsigned int driftIndex = 0; driftIndex < grid.GetAxisDimensions(); ++driftIndex)
+    {
         for (unsigned int wireIndex = 0; wireIndex < grid.GetAxisDimensions(); ++wireIndex)
+        {
             tensorMap(0, driftIndex, wireIndex, 0) = grid.GetGridValues().at(driftIndex).at(wireIndex);
+            //std::cout << "(" << driftIndex << ", " << wireIndex << "): " << grid.GetGridValues().at(driftIndex).at(wireIndex) << std::endl;
+        }
+    } 
 
     return gridTensor;
 }

@@ -94,11 +94,15 @@ public:
 
 private:
   void Reset();
+  void FillPandoraMaps(art::Event const& evt);
   void GetEventInfo(art::Event const & evt);
   void GetTruthInfo(art::Event const & evt);
   void FillVertexInfo(art::Event const & evt);
   void FillPFParticleInfo(art::Event const & evt);
   void FillChildPFPInformation(art::Ptr<recob::PFParticle> const pfp, art::Event const & evt, int &n_child_pfp, int &n_child_track_pfp, int &n_child_shower_pfp);
+  void FillHierarchyInfo(art::Event const & evt);
+  void SetRecoGenerationInfo(art::Event const & evt, const art::Ptr<recob::PFParticle> &pfp, int &recoGeneration, int &recoParentSelf, int &recoParentPDG);
+  void SetTrueGenerationInfo(art::Event const & evt, const int pfpIndex, const bool visibleMode, int &trueGeneration, int &trueParentTrackID, int &trueParentPDG);
   void FillRecoTrackInfo(art::Event const & evt, const art::Ptr<recob::PFParticle> &pfp, const int pfpCounter);
   void FillRecoShowerInfo(art::Event const & evt, const art::Ptr<recob::PFParticle> &pfp, const int pfpCounter);
   void RunTrackSelection(art::Event const & evt);
@@ -112,6 +116,12 @@ private:
   void RunHighestEnergyShowerSelection();
   TVector3 ProjectVectorOntoPlane(TVector3 vector_to_project, TVector3 plane_norm_vector);
 
+  ////////////////////////////////////////
+  // Pandora maps
+  ////////////////////////////////////////
+  lar_pandora::MCParticleMap fMCParticleMap;   // Linking TrackID -> MCParticle
+  lar_pandora::PFParticleMap fPFPMap;          // Linking Self() -> PFParticle
+  std::vector<int> fReconstructedMCParticles;  // TrackIDs of reco'd MCParticles
   ////////////////////////////////////////
   // Trees
   ////////////////////////////////////////
@@ -131,6 +141,7 @@ private:
   //Neutrino 
   int fNuPdg; //Interaction PDG
   int fBeamPdg; //PDG at point of creation
+  int fNuTrackID;
   int fNC;    // 1=is NC, 0=otherwise
   int fMode; // 0=QE/El, 1=RES, 2=DIS, 3=Coherent production
   int fTargetZ; //Atomic number of scattering target
@@ -175,9 +186,11 @@ private:
   std::vector<float> fTrueEnergyDepX_Inner;
   std::vector<float> fTrueEnergyDepY_Inner;
   std::vector<float> fTrueEnergyDepZ_Inner;
-  std::vector<float> fTrueEnergyDepX_Outer;
-  std::vector<float> fTrueEnergyDepY_Outer;
-  std::vector<float> fTrueEnergyDepZ_Outer;
+  std::vector<int> fIsEdepInAPA;
+  std::vector<float> fAPALowY;
+  std::vector<float> fAPAHighY;
+  std::vector<float> fAPALowZ;
+  std::vector<float> fAPAHighZ;
   ////////////////////////////////////////
   // Event-level reco
   ////////////////////////////////////////
@@ -201,6 +214,12 @@ private:
   int fRecoPFPTruePDG[kMaxPFParticles];
   int fRecoPFPTrueTrackID[kMaxPFParticles];
   bool fRecoPFPTruePrimary[kMaxPFParticles];
+  int fRecoPFPTrueGeneration[kMaxPFParticles];
+  int fRecoPFPTrueParentTrackID[kMaxPFParticles];
+  int fRecoPFPTrueParentPDG[kMaxPFParticles];
+  int fRecoPFPTrueVisibleGeneration[kMaxPFParticles];
+  int fRecoPFPTrueVisibleParentTrackID[kMaxPFParticles];
+  int fRecoPFPTrueVisibleParentPDG[kMaxPFParticles];
   double fRecoPFPTrueEnergyEDep[kMaxPFParticles];
   double fRecoPFPTrueMomX[kMaxPFParticles];
   double fRecoPFPTrueMomY[kMaxPFParticles];
@@ -219,6 +238,12 @@ private:
   double fRecoPFPTrackShowerScore[kMaxPFParticles];
   int fRecoPFPTrackShowerPDG[kMaxPFParticles];
   int fRecoPFPRecoNHits[kMaxPFParticles];
+  std::vector<std::vector<double>> fRecoPFPSpacepointX;
+  std::vector<std::vector<double>> fRecoPFPSpacepointY;
+  std::vector<std::vector<double>> fRecoPFPSpacepointZ;
+  int fRecoPFPRecoGeneration[kMaxPFParticles];
+  int fRecoPFPRecoParentSelf[kMaxPFParticles];
+  int fRecoPFPRecoParentPDG[kMaxPFParticles];
   int fRecoPFPShowerFitSuccess[kMaxPFParticles];
   int fRecoPFPTrackFitSuccess[kMaxPFParticles];
   double fRecoPFPRecoCompleteness[kMaxPFParticles];
@@ -356,6 +381,10 @@ private:
   std::string fPOTModuleLabel;
   std::string fCVNModuleLabel;
   ////////////////////////////////////////
+  //Modes
+  ////////////////////////////////////////
+  bool fVisualisationMode;
+  ////////////////////////////////////////
   //Algs
   ////////////////////////////////////////
   PandizzleAlg fPandizzleAlg;
@@ -387,6 +416,7 @@ FDSelection::CCNuSelection::CCNuSelection(fhicl::ParameterSet const & pset) :
   fHitsModuleLabel(pset.get<std::string>("HitsModuleLabel")),
   fPOTModuleLabel(pset.get<std::string>("POTModuleLabel")),
   fCVNModuleLabel(pset.get<std::string>("CVNModuleLabel")),
+  fVisualisationMode(pset.get<bool>("VisualisationMode")),
   fPandizzleAlg(pset.get<fhicl::ParameterSet>("PandizzleConfig")),
   fPandrizzleAlg(pset.get<fhicl::ParameterSet>("PandrizzleConfig")),
   fCalorimetryAlg(pset.get<fhicl::ParameterSet>("CalorimetryAlg")),
@@ -402,7 +432,7 @@ FDSelection::CCNuSelection::CCNuSelection(fhicl::ParameterSet const & pset) :
 
 void FDSelection::CCNuSelection::analyze(art::Event const & evt)
 {
-    //std::cout << "AAAAA" << std::endl;
+    //std::cout << "AAAAAA" << std::endl;
     Reset();
     //std::cout << "BBB" << std::endl;
     fRun = evt.run();
@@ -410,19 +440,26 @@ void FDSelection::CCNuSelection::analyze(art::Event const & evt)
     fEvent = evt.event();
     fIsMC = !evt.isRealData();
     //std::cout << "CCC" << std::endl;
-    GetEventInfo(evt);
+
+    // Get Pandora Maps
+    FillPandoraMaps(evt);
     //std::cout << "DDD" << std::endl;
+    
+    GetEventInfo(evt);
+    //std::cout << "EEE" << std::endl;
     if (fIsMC) 
         GetTruthInfo(evt);
-    //std::cout << "EEE" << std::endl;
-    FillVertexInfo(evt);
     //std::cout << "FFF" << std::endl;
-    FillPFParticleInfo(evt);
+    FillVertexInfo(evt);
     //std::cout << "GGG" << std::endl;
-    RunTrackSelection(evt);
+    FillPFParticleInfo(evt);
     //std::cout << "HHH" << std::endl;
-    RunShowerSelection(evt);
+    FillHierarchyInfo(evt);
     //std::cout << "III" << std::endl;
+    RunTrackSelection(evt);
+    //std::cout << "JJJ" << std::endl;
+    RunShowerSelection(evt);
+    //std::cout << "KKK" << std::endl;
 
     fTree->Fill();
 }
@@ -457,6 +494,7 @@ void FDSelection::CCNuSelection::beginJob()
     ////////////////////////////
     fTree->Branch("NuPdg", &fNuPdg);
     fTree->Branch("BeamPdg", &fBeamPdg);
+    fTree->Branch("NuTrackID", &fNuTrackID);
     fTree->Branch("NC", &fNC);
     fTree->Branch("Mode", &fMode);
     fTree->Branch("TargetZ", &fTargetZ);
@@ -501,9 +539,12 @@ void FDSelection::CCNuSelection::beginJob()
     fTree->Branch("TrueEnergyDepX_Inner", &fTrueEnergyDepX_Inner);
     fTree->Branch("TrueEnergyDepY_Inner", &fTrueEnergyDepY_Inner);
     fTree->Branch("TrueEnergyDepZ_Inner", &fTrueEnergyDepZ_Inner);
-    fTree->Branch("TrueEnergyDepX_Outer", &fTrueEnergyDepX_Outer);
-    fTree->Branch("TrueEnergyDepY_Outer", &fTrueEnergyDepY_Outer);
-    fTree->Branch("TrueEnergyDepZ_Outer", &fTrueEnergyDepZ_Outer);
+    fTree->Branch("IsEdepInAPA", &fIsEdepInAPA);
+    fTree->Branch("APALowY", &fAPALowY);
+    fTree->Branch("APAHighY", &fAPAHighY);
+    fTree->Branch("APALowZ", &fAPALowZ);
+    fTree->Branch("APAHighZ", &fAPAHighZ);
+
     ////////////////////////////
     // Event-level reco info 
     ////////////////////////////
@@ -537,6 +578,12 @@ void FDSelection::CCNuSelection::beginJob()
     fTree->Branch("RecoPFPTruePDG", fRecoPFPTruePDG, "RecoPFPTruePDG[NRecoPFPs]/I");
     fTree->Branch("RecoPFPTrueTrackID", fRecoPFPTrueTrackID, "RecoPFPTrueTrackID[NRecoPFPs]/I");
     fTree->Branch("RecoPFPTruePrimary", fRecoPFPTruePrimary,"RecoPFPTruePrimary[NRecoPFPs]/O");
+    fTree->Branch("RecoPFPTrueGeneration", fRecoPFPTrueGeneration, "RecoPFPTrueGeneration[NRecoPFPs]/I");
+    fTree->Branch("RecoPFPTrueParentTrackID", fRecoPFPTrueParentTrackID, "RecoPFPTrueParentTrackID[NRecoPFPs]/I");
+    fTree->Branch("RecoPFPTrueParentPDG", fRecoPFPTrueParentPDG, "RecoPFPTrueParentPDG[NRecoPFPs]/I");
+    fTree->Branch("RecoPFPTrueVisibleGeneration", fRecoPFPTrueVisibleGeneration, "RecoPFPTrueVisibleGeneration[NRecoPFPs]/I");
+    fTree->Branch("RecoPFPTrueVisibleParentTrackID", fRecoPFPTrueVisibleParentTrackID, "RecoPFPTrueVisibleParentTrackID[NRecoPFPs]/I");
+    fTree->Branch("RecoPFPTrueVisibleParentPDG", fRecoPFPTrueVisibleParentPDG, "RecoPFPTrueVisibleParentPDG[NRecoPFPs]/I");
     fTree->Branch("RecoPFPTrueEnergyEDep", fRecoPFPTrueEnergyEDep, "RecoPFPTrueEnergyEDep[NRecoPFPs]/D");
     fTree->Branch("RecoPFPTrueMomX", fRecoPFPTrueMomX,"RecoPFPTrueMomX[NRecoPFPs]/D");
     fTree->Branch("RecoPFPTrueMomY", fRecoPFPTrueMomY,"RecoPFPTrueMomY[NRecoPFPs]/D");
@@ -551,8 +598,14 @@ void FDSelection::CCNuSelection::beginJob()
     // Reco
     fTree->Branch("RecoPFPSelf", fRecoPFPSelf, "RecoPFPSelf[NRecoPFPs]/I");
     fTree->Branch("RecoPFPIsPrimary", fRecoPFPIsPrimary, "RecoPFPIsPrimary[NRecoPFPs]/O");
+    fTree->Branch("RecoPFPRecoGeneration", fRecoPFPRecoGeneration, "RecoPFPRecoGeneration[NRecoPFPs]/I");
+    fTree->Branch("RecoPFPRecoParentSelf", fRecoPFPRecoParentSelf, "RecoPFPRecoParentSelf[NRecoPFPs]/I");
+    fTree->Branch("RecoPFPRecoParentPDG", fRecoPFPRecoParentPDG, "RecoPFPRecoParentPDG[NRecoPFPs]/I");
     fTree->Branch("RecoPFPTrackShowerScore", fRecoPFPTrackShowerScore, "RecoPFPTrackShowerScore[NRecoPFPs]/D");
     fTree->Branch("RecoPFPTrackShowerPDG", fRecoPFPTrackShowerPDG, "RecoPFPTrackShowerPDG[NRecoPFPs]/I");
+    fTree->Branch("RecoPFPSpacepointX", &fRecoPFPSpacepointX);
+    fTree->Branch("RecoPFPSpacepointY", &fRecoPFPSpacepointY);
+    fTree->Branch("RecoPFPSpacepointZ", &fRecoPFPSpacepointZ);
     fTree->Branch("RecoPFPRecoNHits", fRecoPFPRecoNHits,"RecoPFPRecoNHits[NRecoPFPs]/I");
     fTree->Branch("RecoPFPShowerFitSuccess", fRecoPFPShowerFitSuccess, "RecoPFPShowerFitSuccess[NRecoPFPs]/I");
     fTree->Branch("RecoPFPTrackFitSuccess", fRecoPFPTrackFitSuccess, "RecoPFPTrackFitSuccess[NRecoPFPs]/I");
@@ -728,6 +781,12 @@ void FDSelection::CCNuSelection::Reset()
 {
     fTrueEnergyCalc.Reset();
 
+    ////////////////////////////////////////
+    // Pandora maps
+    ////////////////////////////////////////
+    fMCParticleMap.clear();
+    fPFPMap.clear();
+    fReconstructedMCParticles.clear();
     ////////////////////////////
     // Event info
     ////////////////////////////
@@ -741,6 +800,7 @@ void FDSelection::CCNuSelection::Reset()
     fT0 = kDefDoub;
     fNuPdg = kDefInt; 
     fBeamPdg = kDefInt; 
+    fNuTrackID = kDefInt;
     fNC = kDefInt;    
     fMode = kDefInt; 
     fTargetZ = kDefInt;
@@ -783,9 +843,12 @@ void FDSelection::CCNuSelection::Reset()
     fTrueEnergyDepX_Inner.clear();
     fTrueEnergyDepY_Inner.clear();
     fTrueEnergyDepZ_Inner.clear();
-    fTrueEnergyDepX_Outer.clear();
-    fTrueEnergyDepY_Outer.clear();
-    fTrueEnergyDepZ_Outer.clear();
+    fIsEdepInAPA.clear();
+    fAPALowY.clear();
+    fAPAHighY.clear();
+    fAPALowZ.clear();
+    fAPAHighZ.clear();
+
     ////////////////////////////
     // Event-level reco info 
     ////////////////////////////
@@ -826,6 +889,12 @@ void FDSelection::CCNuSelection::Reset()
         fRecoPFPTruePDG[i] = kDefInt;
         fRecoPFPTrueTrackID[i] = kDefInt;
         fRecoPFPTruePrimary[i] = false;
+        fRecoPFPTrueGeneration[i] = kDefInt;
+        fRecoPFPTrueParentTrackID[i] = kDefInt;
+        fRecoPFPTrueParentPDG[i] = kDefInt;
+        fRecoPFPTrueVisibleGeneration[i] = kDefInt;
+        fRecoPFPTrueVisibleParentTrackID[i] = kDefInt;
+        fRecoPFPTrueVisibleParentPDG[i] = kDefInt;
         fRecoPFPTrueEnergyEDep[i] = kDefDoub;
         fRecoPFPTrueMomX[i] = kDefDoub;
         fRecoPFPTrueMomY[i] = kDefDoub;
@@ -840,9 +909,15 @@ void FDSelection::CCNuSelection::Reset()
         // Reco
         fRecoPFPSelf[i] = kDefInt;
         fRecoPFPIsPrimary[i] = false;
+        fRecoPFPRecoGeneration[i] = kDefInt;
+        fRecoPFPRecoParentSelf[i] = kDefInt;
+        fRecoPFPRecoParentPDG[i] = kDefInt;
         fRecoPFPTrackShowerScore[i] = kDefDoub;
         fRecoPFPTrackShowerPDG[i] = kDefInt;
         fRecoPFPRecoNHits[i] = kDefInt;
+        fRecoPFPSpacepointX.clear();
+        fRecoPFPSpacepointY.clear();
+        fRecoPFPSpacepointZ.clear();
         fRecoPFPShowerFitSuccess[i] = 0;
         fRecoPFPTrackFitSuccess[i] = 0;
         fRecoPFPRecoCompleteness[i] = kDefDoub;
@@ -975,6 +1050,19 @@ void FDSelection::CCNuSelection::Reset()
 
 //////////////////////////////////////////////////////////////////////////////////
 
+void FDSelection::CCNuSelection::FillPandoraMaps(art::Event const& evt)
+{
+    // MCParticle map
+    const std::vector<art::Ptr<simb::MCParticle>> mcParticles = dune_ana::DUNEAnaEventUtils::GetMCParticles(evt, fLargeantModuleLabel);
+    lar_pandora::LArPandoraHelper::BuildMCParticleMap(mcParticles, fMCParticleMap);
+
+    // PFParticle map
+    std::vector<art::Ptr<recob::PFParticle>> pfps = dune_ana::DUNEAnaEventUtils::GetPFParticles(evt, fRecoModuleLabel);
+    lar_pandora::LArPandoraHelper::BuildPFParticleMap(pfps, fPFPMap);
+}
+
+//////////////////////////////////////////////////////////////////////////////////
+
 void FDSelection::CCNuSelection::GetEventInfo(art::Event const & evt)
 {
     auto const clockData = art::ServiceHandle<detinfo::DetectorClocksService>()->DataFor(evt);
@@ -1013,6 +1101,7 @@ void FDSelection::CCNuSelection::GetTruthInfo(art::Event const & evt)
 {
     fTrueEnergyCalc.InitialiseCalc(evt);
 
+    /*
     // Investigating stuff...
     //////////////////////////////////////////////////////////////////////////////////
     // Get the 'inner' sim energy deposit positions
@@ -1022,26 +1111,59 @@ void FDSelection::CCNuSelection::GetTruthInfo(art::Event const & evt)
     if (evt.getByLabel("largeant:LArG4DetectorServicevolTPCActiveInner", simEDepHandle_inner))
         art::fill_ptr_vector(simEDepVector_inner, simEDepHandle_inner);
 
+    lar_pandora::LArDriftVolumeList driftVolumeList; // list of 'drift volumes' (i think there's a bug.. there's a lot of repitition in this map)
+    lar_pandora::LArDriftVolumeMap tpcVolumeMap; // map of 'tpc volumes' to 'tpc volume list!' i.e. apa volumes
+    bool useActiveBoundingBox = true; //true;
+
+    lar_pandora::LArPandoraGeometry::LoadGeometry(driftVolumeList, tpcVolumeMap, useActiveBoundingBox);
+
+    std::vector<float> yGapBoundaries, zGapBoundaries;
+
+    for (const auto &driftVol : driftVolumeList)
+    {
+        for (const auto &apaVol : driftVol.GetTpcVolumeList())
+        {
+            const float yLow = apaVol.GetCenterY() - (apaVol.GetWidthY() * 0.5);
+            const float yHigh = apaVol.GetCenterY() + (apaVol.GetWidthY() * 0.5);
+            const float zLow = apaVol.GetCenterZ() - (apaVol.GetWidthZ() * 0.5);
+            const float zHigh = apaVol.GetCenterZ() + (apaVol.GetWidthZ() * 0.5);
+
+            fAPALowY.push_back(yLow);
+            fAPAHighY.push_back(yHigh);
+            fAPALowZ.push_back(zLow);
+            fAPAHighZ.push_back(zHigh);
+        }
+    }
+
     for (const art::Ptr<sim::SimEnergyDeposit> &simEDep : simEDepVector_inner)
     {
-        fTrueEnergyDepX_Inner.push_back(simEDep->X());
-        fTrueEnergyDepY_Inner.push_back(simEDep->Y());
-        fTrueEnergyDepZ_Inner.push_back(simEDep->Z());
+        const float x = simEDep->X();
+        const float y = simEDep->Y();
+        const float z = simEDep->Z();
+
+        fTrueEnergyDepX_Inner.push_back(x);
+        fTrueEnergyDepY_Inner.push_back(y);
+        fTrueEnergyDepZ_Inner.push_back(z);
+
+        int isInAPAVol = 0;
+
+        for (unsigned int iAPA = 0; iAPA < fAPALowY.size(); iAPA++)
+        {
+            const float apaLowY = fAPALowY.at(iAPA);
+            const float apaHighY = fAPAHighY.at(iAPA);
+            const float apaLowZ = fAPALowZ.at(iAPA);
+            const float apaHighZ = fAPAHighZ.at(iAPA);
+
+            if ((y > apaLowY) && (y < apaHighY) && (z > apaLowZ) && (z < apaHighZ))
+            {
+                isInAPAVol = 1;
+                break;
+            }
+        }
+
+        fIsEdepInAPA.push_back(isInAPAVol);
     }
-
-    // Get the 'outer' sim energy deposit positions
-    art::Handle<std::vector<sim::SimEnergyDeposit>> simEDepHandle_outer;
-    std::vector<art::Ptr<sim::SimEnergyDeposit>> simEDepVector_outer;
-
-    if (evt.getByLabel("largeant:LArG4DetectorServicevolTPCActiveOuter", simEDepHandle_outer))
-        art::fill_ptr_vector(simEDepVector_outer, simEDepHandle_outer);
-
-    for (const art::Ptr<sim::SimEnergyDeposit> &simEDep : simEDepVector_outer)
-    {
-        fTrueEnergyDepX_Outer.push_back(simEDep->X());
-        fTrueEnergyDepY_Outer.push_back(simEDep->Y());
-        fTrueEnergyDepZ_Outer.push_back(simEDep->Z());
-    }
+    */
     //////////////////////////////////////////////////////////////////////////////////
 
 
@@ -1067,6 +1189,7 @@ void FDSelection::CCNuSelection::GetTruthInfo(art::Event const & evt)
 
     // Neutrino
     const simb::MCNeutrino &mcNeutrino = mcTruth->GetNeutrino();
+    fNuTrackID = mcNeutrino.Nu().TrackId();
     fNuPdg = mcNeutrino.Nu().PdgCode();
     fNC = mcNeutrino.CCNC();
     fMode = mcNeutrino.Mode(); //0=QE/El, 1=RES, 2=DIS, 3=Coherent production
@@ -1102,12 +1225,6 @@ void FDSelection::CCNuSelection::GetTruthInfo(art::Event const & evt)
     fLepNuAngle = mcNeutrino.Nu().Momentum().Vect().Angle(mcLepton.Momentum().Vect());
 
     // Does leading lepton Michel decay?
-    std::map<int, art::Ptr<simb::MCParticle>> mcParticleMap;
-    const std::vector<art::Ptr<simb::MCParticle>> allMCParticles = dune_ana::DUNEAnaEventUtils::GetMCParticles(evt, fLargeantModuleLabel);
-
-    for (const art::Ptr<simb::MCParticle> &mcParticle : allMCParticles)
-        mcParticleMap[mcParticle->TrackId()] = mcParticle;
-
     bool hasNumu = false, hasNue = false, hasElectron = false;
 
     if (std::abs(fLepPDG) == 13)
@@ -1116,10 +1233,10 @@ void FDSelection::CCNuSelection::GetTruthInfo(art::Event const & evt)
         {
             const int childTrackId = mcLepton.Daughter(i);
 
-            if (mcParticleMap.find(childTrackId) == mcParticleMap.end())
+            if (fMCParticleMap.find(childTrackId) == fMCParticleMap.end())
                 continue;
 
-            const art::Ptr<simb::MCParticle> &childMCParticle = mcParticleMap.at(childTrackId);
+            const art::Ptr<simb::MCParticle> &childMCParticle = fMCParticleMap.at(childTrackId);
             const int childPDG = std::abs(childMCParticle->PdgCode());
 
             if (childPDG == 11)
@@ -1251,10 +1368,10 @@ void FDSelection::CCNuSelection::FillPFParticleInfo(art::Event const & evt)
         pfpIndex++;
         fNRecoPFPs++;
 
-        fRecoPFPSelf[pfpIndex] = pfp->Self();
-
         if (pfpIndex == kMaxPFParticles)
             break;
+
+        fRecoPFPSelf[pfpIndex] = pfp->Self();
 
         for (art::Ptr<recob::PFParticle> nuChild : nuChildren)
         {
@@ -1278,6 +1395,26 @@ void FDSelection::CCNuSelection::FillPFParticleInfo(art::Event const & evt)
 
         const std::vector<art::Ptr<recob::Hit>> pfpHits = dune_ana::DUNEAnaPFParticleUtils::GetHits(pfp, evt, fRecoModuleLabel);
         fRecoPFPRecoNHits[pfpIndex] = pfpHits.size();
+
+
+        // If visualise then drop in spacepoint information
+        if (fVisualisationMode)
+        {
+            const std::vector<art::Ptr<recob::SpacePoint>> &spacepoints = dune_ana::DUNEAnaPFParticleUtils::GetSpacePoints(pfp, evt, fRecoModuleLabel);
+
+            std::vector<double> spacepointX, spacepointY, spacepointZ;
+
+            for (const art::Ptr<recob::SpacePoint> &spacepoint : spacepoints)
+            {
+                spacepointX.push_back(spacepoint->XYZ()[0]);
+                spacepointY.push_back(spacepoint->XYZ()[1]);
+                spacepointZ.push_back(spacepoint->XYZ()[2]);
+            }
+
+            fRecoPFPSpacepointX.push_back(spacepointX);
+            fRecoPFPSpacepointY.push_back(spacepointY);
+            fRecoPFPSpacepointZ.push_back(spacepointZ);
+        }
 
         auto const clockData = art::ServiceHandle<detinfo::DetectorClocksService>()->DataFor(evt);
         auto const detProp = art::ServiceHandle<detinfo::DetectorPropertiesService>()->DataForJob(clockData);
@@ -1312,6 +1449,7 @@ void FDSelection::CCNuSelection::FillPFParticleInfo(art::Event const & evt)
             {
                 fRecoPFPTruePDG[pfpIndex] = matched_mcparticle->PdgCode();
                 fRecoPFPTrueTrackID[pfpIndex] = matched_mcparticle->TrackId();
+                fReconstructedMCParticles.push_back(fRecoPFPTrueTrackID[pfpIndex]);
 
                 if (matched_mcparticle->Mother() == 0) 
                     fRecoPFPTruePrimary[pfpIndex] = true;
@@ -1388,6 +1526,111 @@ void FDSelection::CCNuSelection::FillChildPFPInformation(art::Ptr<recob::PFParti
         else 
             std::cout << "FillChildPFPInformation: found a child PFP with an unexpected pdg code: " << pdg << std::endl;
     }
+}
+
+//////////////////////////////////////////////////////////////////////////////////
+
+void FDSelection::CCNuSelection::FillHierarchyInfo(art::Event const & evt)
+{
+    if (!dune_ana::DUNEAnaEventUtils::HasNeutrino(evt, fRecoModuleLabel))
+        return;
+
+    std::vector<art::Ptr<recob::PFParticle>> pfps = dune_ana::DUNEAnaEventUtils::GetPFParticles(evt, fRecoModuleLabel);
+
+    int pfpIndex = -1;
+
+    for (art::Ptr<recob::PFParticle> pfp : pfps)
+    {
+        if ((std::fabs(pfp->PdgCode()) == 12) || (std::fabs(pfp->PdgCode()) == 14) || (std::fabs(pfp->PdgCode()) == 16))
+            continue;
+
+        pfpIndex++;
+
+        if (pfpIndex == kMaxPFParticles)
+            break;
+
+
+        SetRecoGenerationInfo(evt, pfp, fRecoPFPRecoGeneration[pfpIndex], fRecoPFPRecoParentSelf[pfpIndex], fRecoPFPRecoParentPDG[pfpIndex]);
+        SetTrueGenerationInfo(evt, pfpIndex, false, fRecoPFPTrueGeneration[pfpIndex], fRecoPFPTrueParentTrackID[pfpIndex], fRecoPFPTrueParentPDG[pfpIndex]);
+        SetTrueGenerationInfo(evt, pfpIndex, true, fRecoPFPTrueVisibleGeneration[pfpIndex], fRecoPFPTrueVisibleParentTrackID[pfpIndex], fRecoPFPTrueVisibleParentPDG[pfpIndex]);
+    }
+}
+
+//////////////////////////////////////////////////////////////////////////////////
+
+void FDSelection::CCNuSelection::SetRecoGenerationInfo(art::Event const & evt, const art::Ptr<recob::PFParticle> &pfp, 
+    int &recoGeneration, int &recoParentSelf, int &recoParentPDG)
+{
+    recoGeneration = lar_pandora::LArPandoraHelper::GetGeneration(fPFPMap, pfp);
+    const int parentID = pfp->Parent();
+
+    if ((recoGeneration == 1) || (fPFPMap.find(parentID) == fPFPMap.end()))
+    {
+        recoParentSelf = kDefInt;
+        recoParentPDG = kDefInt;
+        return;
+    }
+
+    recoParentSelf = fPFPMap.at(parentID)->Self();
+    recoParentPDG = kDefInt; // for now.. else I'll have to implement a matching map...
+}
+
+//////////////////////////////////////////////////////////////////////////////////
+
+void FDSelection::CCNuSelection::SetTrueGenerationInfo(art::Event const & evt, const int pfpIndex, const bool visibleMode, 
+    int &trueGeneration, int &trueParentTrackID, int &trueParentPDG)
+{
+    trueGeneration = kDefInt;
+    trueParentTrackID = kDefInt;
+    trueParentPDG = kDefInt;
+
+    // Make sure we have a true neutrino interaction
+    if (fNuTrackID == kDefInt)
+        return;
+
+    int trueGen = 1; // 1 corresponds to the neutrino
+    int currentTrackID = fRecoPFPTrueTrackID[pfpIndex]; // Get the matched track ID
+    bool foundParent = false;
+
+    do
+    {
+        if (fMCParticleMap.find(currentTrackID) == fMCParticleMap.end())
+        {
+            trueGeneration = kDefInt;
+            trueParentTrackID = kDefInt;
+            trueParentPDG = kDefInt;
+            return;
+        }
+
+        const art::Ptr<simb::MCParticle> currentMCParticle = fMCParticleMap.at(currentTrackID);
+        currentTrackID = currentMCParticle->Mother();
+
+        std::cout << "currentMCParticle->PdgCode(): " << currentMCParticle->PdgCode() << std::endl;
+        std::cout << "currentTrackID: " << currentTrackID << std::endl;
+        std::cout << "fNuTrackID: " << fNuTrackID << std::endl;
+
+        // If parent is not reconstructed, move on
+        if (visibleMode && (currentTrackID != fNuTrackID))
+        {
+            if (std::find(fReconstructedMCParticles.begin(), fReconstructedMCParticles.end(), currentTrackID) == 
+                fReconstructedMCParticles.end())
+            {
+                continue;
+            }
+        }
+
+        if (!foundParent)
+        {
+            trueParentTrackID = (currentTrackID == fNuTrackID ? fNuTrackID : fMCParticleMap.at(currentTrackID)->TrackId());
+            trueParentPDG = (currentTrackID == fNuTrackID ? -1 :fMCParticleMap.at(currentTrackID)->PdgCode());
+            foundParent = true;
+        }
+
+        ++trueGen;
+    }
+    while (currentTrackID != fNuTrackID);
+
+    trueGeneration = trueGen;
 }
 
 //////////////////////////////////////////////////////////////////////////////////
