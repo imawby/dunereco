@@ -1,0 +1,10 @@
+BEGIN_PROLOG
+
+true_energy_calc:
+{
+  SimEDepModuleLabel:    "largeant:LArG4DetectorServicevolTPCActiveInner"
+  GeneratorModuleLabel:  "generator"
+  GeantModuleLabel:      "largeant"
+}
+
+END_PROLOG
