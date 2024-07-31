@@ -109,7 +109,8 @@ private:
   void FillRecoShowerInfo(art::Event const & evt, const art::Ptr<recob::PFParticle> &pfp, const int pfpCounter);
   void FillParentChildLinkInfo(art::Event const & evt);
   void FillTrueParentChildLinkInfo(const int linkIndex, const int parentPFPIndex, const int childPFPIndex);
-  void FillRecoParentChildLinkInfo(art::Event const & evt, const art::Ptr<recob::PFParticle> childPFP, art::Ptr<recob::PFParticle> parentPFP, const int linkIndex);
+  void FillRecoParentChildLinkInfo(art::Event const & evt, const art::Ptr<recob::PFParticle> childPFP, 
+    art::Ptr<recob::PFParticle> parentPFP, const int childIndex, const int parentIndex, const int linkIndex);
   void RunTrackSelection(art::Event const & evt);
   void RunPandizzleTrackSelection();
   void RunDeepPanTrackSelection();
@@ -382,6 +383,8 @@ private:
   int fNParentChildLinks;
   // Parent information
   double fParentTrackScore[kMaxParentChildLinks];
+  double fParentNuVertexSeparation[kMaxParentChildLinks];
+  double fChildNuVertexSeparation[kMaxParentChildLinks];
   double fParentBraggVariable[kMaxParentChildLinks];
   double fParentEndRegionNHits[kMaxParentChildLinks];
   double fParentEndRegionNParticles[kMaxParentChildLinks];
@@ -394,7 +397,7 @@ private:
   double fSeparationV[kMaxParentChildLinks];
   double fSeparationW[kMaxParentChildLinks];
   double fSeparation3D[kMaxParentChildLinks];
-  double fEnergyRatio[kMaxParentChildLinks];
+  double fChargeRatio[kMaxParentChildLinks];
   double fPIDLinkType[kMaxParentChildLinks];
   double fOpeningAngle[kMaxParentChildLinks];
   double fTrackShowerLinkType[kMaxParentChildLinks];
@@ -777,6 +780,8 @@ void FDSelection::CCNuSelection::beginJob()
     fTree->Branch("TrueParentChildLink", &fTrueParentChildLink, "TrueParentChildLink[NParentChildLinks]/O");
     // Parent information
     fTree->Branch("ParentTrackScore", &fParentTrackScore, "ParentTrackScore[NParentChildLinks]/D");
+    fTree->Branch("ParentNuVertexSeparation", &fParentNuVertexSeparation, "ParentNuVertexSeparation[NParentChildLinks]/D");
+    fTree->Branch("ChildNuVertexSeparation", &fChildNuVertexSeparation, "ChildNuVertexSeparation[NParentChildLinks]/D");
     fTree->Branch("ParentBraggVariable", &fParentBraggVariable, "ParentBraggVariable[NParentChildLinks]/D");
     fTree->Branch("ParentEndRegionNHits", &fParentEndRegionNHits, "ParentEndRegionNHits[NParentChildLinks]/D");
     fTree->Branch("ParentEndRegionNParticles", &fParentEndRegionNParticles, "ParentEndRegionNParticles[NParentChildLinks]/D");
@@ -789,7 +794,7 @@ void FDSelection::CCNuSelection::beginJob()
     fTree->Branch("SeparationV", &fSeparationV, "SeparationV[NParentChildLinks]/D");
     fTree->Branch("SeparationW", &fSeparationW, "SeparationW[NParentChildLinks]/D");
     fTree->Branch("Separation3D", &fSeparation3D, "Separation3D[NParentChildLinks]/D");
-    fTree->Branch("EnergyRatio", &fEnergyRatio, "EnergyRatio[NParentChildLinks]/D");
+    fTree->Branch("ChargeRatio", &fChargeRatio, "ChargeRatio[NParentChildLinks]/D");
     fTree->Branch("PIDLinkType", &fPIDLinkType, "PIDLinkType[NParentChildLinks]/D");
     fTree->Branch("OpeningAngle", &fOpeningAngle, "OpeningAngle[NParentChildLinks]/D");
     fTree->Branch("TrackShowerLinkType", &fTrackShowerLinkType, "TrackShowerLinkType[NParentChildLinks]/D");
@@ -1114,6 +1119,8 @@ void FDSelection::CCNuSelection::Reset()
         fTrueParentChildLink[i] = false;
         // Parent information
         fParentTrackScore[i] = kDefDoub;
+        fParentNuVertexSeparation[i] = kDefDoub;
+        fChildNuVertexSeparation[i] = kDefDoub;
         fParentBraggVariable[i] = kDefDoub;
         fParentEndRegionNHits[i] = kDefDoub;
         fParentEndRegionNParticles[i] = kDefDoub;
@@ -1126,7 +1133,7 @@ void FDSelection::CCNuSelection::Reset()
         fSeparationV[i] = kDefDoub;
         fSeparationW[i] = kDefDoub;
         fSeparation3D[i] = kDefDoub;
-        fEnergyRatio[i] = kDefDoub;
+        fChargeRatio[i] = kDefDoub;
         fPIDLinkType[i] = kDefDoub;
         fOpeningAngle[i] = kDefDoub;
         fTrackShowerLinkType[i] = kDefDoub;
@@ -1924,6 +1931,8 @@ void FDSelection::CCNuSelection::FillParentChildLinkInfo(art::Event const & evt)
 
         parentPFPIndex++;
 
+        std::cout << "parentPFPIndex: " << parentPFPIndex << std::endl;
+
         if (parentPFPIndex >= kMaxPFParticles)
             break;
 
@@ -1937,8 +1946,15 @@ void FDSelection::CCNuSelection::FillParentChildLinkInfo(art::Event const & evt)
 
             childPFPIndex++;
 
+            std::cout << "childPFPIndex: " << childPFPIndex << std::endl;
+
             if (childPFPIndex >= kMaxPFParticles)
                 break;
+
+            if (parentPFP == childPFP)
+                continue;
+
+            std::cout << "----------------------------" << std::endl;
 
             // Increase number of links
             linkIndex++;
@@ -1952,7 +1968,9 @@ void FDSelection::CCNuSelection::FillParentChildLinkInfo(art::Event const & evt)
             FillTrueParentChildLinkInfo(linkIndex, parentPFPIndex, childPFPIndex);
 
             // Fill reco parent-child link info
-            FillRecoParentChildLinkInfo(evt, childPFP, parentPFP, linkIndex);
+            FillRecoParentChildLinkInfo(evt, childPFP, parentPFP, childPFPIndex, parentPFPIndex, linkIndex);
+
+            std::cout << "----------------------------" << std::endl;
         }
     }
 }
@@ -1978,27 +1996,50 @@ void FDSelection::CCNuSelection::FillTrueParentChildLinkInfo(const int linkIndex
     {
         fTrueParentChildLink[linkIndex] = false;
     }
+
+    /////////////////////////////////////////
+    std::cout << "fTrueParentChildLink: " << (fTrueParentChildLink[linkIndex] ? "yes" : "no") << std::endl;
+    /////////////////////////////////////////
 }
 
 //////////////////////////////////////////////////////////////////////////////////
 
 void FDSelection::CCNuSelection::FillRecoParentChildLinkInfo(art::Event const & evt, const art::Ptr<recob::PFParticle> childPFP, 
-    art::Ptr<recob::PFParticle> parentPFP, const int linkIndex)
+    art::Ptr<recob::PFParticle> parentPFP, const int childIndex, const int parentIndex, const int linkIndex)
 { 
     // Parent information
     fParentTrackScore[linkIndex] = HierarchyUtils::GetTrackScore(evt, parentPFP, fRecoModuleLabel);
+    fParentNuVertexSeparation[linkIndex] = HierarchyUtils::GetNuVertexSeparation(evt, parentPFP, fRecoModuleLabel);
+    fChildNuVertexSeparation[linkIndex] = HierarchyUtils::GetNuVertexSeparation(evt, childPFP, fRecoModuleLabel);
     fParentBraggVariable[linkIndex] = HierarchyUtils::GetBraggVariable();
-    fParentEndRegionNHits[linkIndex] = HierarchyUtils::GetEndRegionNHits();
-    fParentEndRegionNParticles[linkIndex] = HierarchyUtils::GetEndRegionNParticles();
-    fParentEndRegionRToWall[linkIndex] = HierarchyUtils::GetEndRegionRToWall();
+    fParentEndRegionNHits[linkIndex] = HierarchyUtils::GetEndRegionNHits(evt, parentPFP, fTrackModuleLabel,  fRecoModuleLabel, 5.0);
+    fParentEndRegionNParticles[linkIndex] = HierarchyUtils::GetEndRegionNParticles(evt, parentPFP, fTrackModuleLabel,  fRecoModuleLabel, 5.0);
+    fParentEndRegionRToWall[linkIndex] = HierarchyUtils::GetEndRegionRToWall(evt, parentPFP, fRecoModuleLabel, fTrackModuleLabel);
 
     // Edge information
-    fVertexSeparation[linkIndex] = HierarchyUtils::GetVertexSeparation();
-    fSeparation3D[linkIndex] = HierarchyUtils::GetSeparation3D();
-    fEnergyRatio[linkIndex] = HierarchyUtils::GetEnergyRatio();
-    fPIDLinkType[linkIndex] = HierarchyUtils::GetPIDLinkType();
-    fOpeningAngle[linkIndex] = HierarchyUtils::GetOpeningAngle();
-    fTrackShowerLinkType[linkIndex] = HierarchyUtils::GetTrackShowerLinkType();
+    fVertexSeparation[linkIndex] = HierarchyUtils::GetVertexSeparation(evt, parentPFP, childPFP, fRecoModuleLabel);
+    fSeparation3D[linkIndex] = HierarchyUtils::GetSeparation3D(evt, parentPFP, childPFP, fRecoModuleLabel);
+    fChargeRatio[linkIndex] = HierarchyUtils::GetChargeRatio(evt, parentPFP, childPFP, fRecoModuleLabel); 
+    fPIDLinkType[linkIndex] = HierarchyUtils::GetPIDLinkType(fRecoPFPTruePDG[parentIndex], fRecoPFPTruePDG[childIndex]); // ISOBEL - THIS IS CHEATED!
+    fOpeningAngle[linkIndex] = HierarchyUtils::GetOpeningAngle(evt, parentPFP, childPFP, fRecoModuleLabel);
+    fTrackShowerLinkType[linkIndex] =  HierarchyUtils::GetTrackShowerLinkType(evt, parentPFP, childPFP, fRecoModuleLabel);
+
+    /////////////////////////////////////////
+    std::cout << "fParentTrackScore: " << fParentTrackScore[linkIndex] << std::endl;
+    std::cout << "fParentNuVertexSeparation: " << fParentNuVertexSeparation[linkIndex] << std::endl;
+    std::cout << "fChildNuVertexSeparation: " << fChildNuVertexSeparation[linkIndex] << std::endl;
+    std::cout << "fParentBraggVariable: " << fParentBraggVariable[linkIndex] << std::endl;
+    std::cout << "fParentEndRegionNHits: " << fParentEndRegionNHits[linkIndex] << std::endl;
+    std::cout << "fParentEndRegionNParticles: " << fParentEndRegionNParticles[linkIndex] << std::endl;
+    std::cout << "fParentEndRegionRToWall: " << fParentEndRegionRToWall[linkIndex] << std::endl;
+
+    std::cout << "fVertexSeparation: " << fVertexSeparation[linkIndex] << std::endl;
+    std::cout << "fSeparation3D: " << fSeparation3D[linkIndex] << std::endl;
+    std::cout << "fChargeRatio: " << fChargeRatio[linkIndex] << std::endl;
+    std::cout << "fPIDLinkType: " << fPIDLinkType[linkIndex] << std::endl;
+    std::cout << "fOpeningAngle: " << fOpeningAngle[linkIndex] << std::endl;
+    std::cout << "fTrackShowerLinkType: " << fTrackShowerLinkType[linkIndex] << std::endl;
+    /////////////////////////////////////////
 }
 
 ///////////////////////////////////////////////////////////////

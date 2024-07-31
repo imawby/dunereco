@@ -36,17 +36,44 @@ namespace HierarchyUtils
 
  // PFP-level
  double GetTrackScore(art::Event const & evt, const art::Ptr<recob::PFParticle> pfp, const std::string recoModuleLabel);
+
+ double GetNuVertexSeparation(art::Event const & evt, const art::Ptr<recob::PFParticle> pfp, 
+     const std::string recoModuleLabel);
+
  double GetBraggVariable();
- int GetEndRegionNHits();
- int GetEndRegionNParticles();
- double GetEndRegionRToWall();
+
+ int GetEndRegionNHits(art::Event const & evt, const art::Ptr<recob::PFParticle> pfp, const std::string trackModuleLabel,  
+     const std::string recoModuleLabel, const double separationThreshold);
+
+ int GetEndRegionNParticles(art::Event const & evt, const art::Ptr<recob::PFParticle> pfp, const std::string trackModuleLabel,  
+     const std::string recoModuleLabel, const double separationThreshold);
+
+ double GetEndRegionRToWall(art::Event const & evt, const art::Ptr<recob::PFParticle> pfp, const std::string recoModuleLabel, 
+     const std::string trackModuleLabel);
+
  // Edge-level
- double GetVertexSeparation();
- double GetSeparation3D();
- double GetEnergyRatio();
- int GetPIDLinkType();
- double GetOpeningAngle();
- int GetTrackShowerLinkType();
+ double GetVertexSeparation(art::Event const & evt, const art::Ptr<recob::PFParticle> parentPFP, const art::Ptr<recob::PFParticle> childPFP, 
+     const std::string recoModuleLabel);
+
+ double GetSeparation3D(art::Event const & evt, const art::Ptr<recob::PFParticle> parentPFP, const art::Ptr<recob::PFParticle> childPFP, 
+     const std::string recoModuleLabel);
+
+ double GetChargeRatio(art::Event const & evt, const art::Ptr<recob::PFParticle> parentPFP, const art::Ptr<recob::PFParticle> childPFP, 
+     const std::string recoModuleLabel);
+
+ double GetPFPCharge(art::Event const & evt, const art::Ptr<recob::PFParticle> pfp, const std::string recoModuleLabel);
+
+ int GetPIDLinkType(const int parentPDG, const int childPDG);
+
+ double GetOpeningAngle(art::Event const & evt, const art::Ptr<recob::PFParticle> parentPFP, const art::Ptr<recob::PFParticle> childPFP, 
+    const std::string recoModuleLabel);
+
+ bool GetParticleDirection(const art::Event &evt, const art::Ptr<recob::PFParticle> &pfp, const std::string recoModuleLabel, 
+    const float searchRegion, TVector3 &pfpDirection);
+
+ int GetTrackShowerLinkType(art::Event const & evt, const art::Ptr<recob::PFParticle> parentPFP, const art::Ptr<recob::PFParticle> childPFP, 
+    const std::string recoModuleLabel);
+
 }
 
 #endif
