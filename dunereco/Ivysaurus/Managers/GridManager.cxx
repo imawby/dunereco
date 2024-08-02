@@ -286,7 +286,6 @@ bool GridManager::GetStartExtremalPoints(const art::Event &evt, const art::Ptr<r
     }
     catch (...)
     {
-        std::cout << "no neutrino vertex..." << std::endl;
         return false;
     }
 
@@ -297,10 +296,7 @@ bool GridManager::GetStartExtremalPoints(const art::Event &evt, const art::Ptr<r
     const std::vector<art::Ptr<recob::SpacePoint>> spacepoints = dune_ana::DUNEAnaPFParticleUtils::GetSpacePoints(pfparticle, evt, m_recoModuleLabel); 
 
     if (spacepoints.empty())
-    {
-        std::cout << "spacepoints empty" << std::endl;
         return false;
-    }
 
     try
     {
@@ -378,10 +374,7 @@ bool GridManager::GetStartExtremalPoints(const art::Event &evt, const art::Ptr<r
         }
 
         if ((bestTheta0YZBin < 0) || (bestTheta0XZBin < 0))
-        {
-            std::cout << "bin issue" << std::endl;
             return false;
-        }
 
         const float bestTheta0YZ = angleMin + ((static_cast<float>(bestTheta0YZBin) + 0.5f) * binWidth);
         const float bestTheta0XZ = angleMin + ((static_cast<float>(bestTheta0XZBin) + 0.5f) * binWidth);
@@ -404,7 +397,6 @@ bool GridManager::GetStartExtremalPoints(const art::Event &evt, const art::Ptr<r
     }
     catch (...)
     {
-        std::cout << "spacePoints.size(): " << spacepoints.size() << std::endl;
         return false;
     }
 

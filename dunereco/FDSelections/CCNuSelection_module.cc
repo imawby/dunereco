@@ -465,33 +465,33 @@ FDSelection::CCNuSelection::CCNuSelection(fhicl::ParameterSet const & pset) :
 
 void FDSelection::CCNuSelection::analyze(art::Event const & evt)
 {
-    std::cout << "AAAAAA" << std::endl;
+    //std::cout << "AAAAAA" << std::endl;
     Reset();
-    std::cout << "BBB" << std::endl;
+    //std::cout << "BBB" << std::endl;
     fRun = evt.run();
     fSubRun = evt.subRun();
     fEvent = evt.event();
     fIsMC = !evt.isRealData();
-    std::cout << "CCC" << std::endl;
+    //std::cout << "CCC" << std::endl;
     FillPandoraMaps(evt);
-    std::cout << "DDD" << std::endl;
+    //std::cout << "DDD" << std::endl;
     GetEventInfo(evt);
-    std::cout << "EEE" << std::endl;
+    //std::cout << "EEE" << std::endl;
     if (fIsMC) 
         GetTruthInfo(evt);
-    std::cout << "FFF" << std::endl;
+    //std::cout << "FFF" << std::endl;
     FillVertexInfo(evt);
-    std::cout << "GGG" << std::endl;
+    //std::cout << "GGG" << std::endl;
     FillPFParticleInfo(evt);
-    std::cout << "HHH" << std::endl;
+    //std::cout << "HHH" << std::endl;
     FillHierarchyInfo(evt);
-    std::cout << "III" << std::endl;
+    //std::cout << "III" << std::endl;
     FillParentChildLinkInfo(evt);
-    std::cout << "JJJ" << std::endl;
+    //std::cout << "JJJ" << std::endl;
     RunTrackSelection(evt);
-    std::cout << "KKK" << std::endl;
+    //std::cout << "KKK" << std::endl;
     RunShowerSelection(evt);
-    std::cout << "LLL" << std::endl;
+    //std::cout << "LLL" << std::endl;
 
     fTree->Fill();
 }
@@ -1931,11 +1931,17 @@ void FDSelection::CCNuSelection::FillParentChildLinkInfo(art::Event const & evt)
 
         parentPFPIndex++;
 
-        std::cout << "parentPFPIndex: " << parentPFPIndex << std::endl;
+        //std::cout << "parentPFPIndex: " << parentPFPIndex << std::endl;
 
         if (parentPFPIndex >= kMaxPFParticles)
             break;
 
+        // Want to only consider particles with a 3D representation
+        const std::vector<art::Ptr<recob::SpacePoint>> parentSpacepoints = dune_ana::DUNEAnaPFParticleUtils::GetSpacePoints(parentPFP, evt, fRecoModuleLabel);
+
+        if (parentSpacepoints.empty())
+            continue;
+        
         // Loop over all particles as children
         int childPFPIndex = -1;
 
@@ -1946,15 +1952,26 @@ void FDSelection::CCNuSelection::FillParentChildLinkInfo(art::Event const & evt)
 
             childPFPIndex++;
 
-            std::cout << "childPFPIndex: " << childPFPIndex << std::endl;
+            //std::cout << "childPFPIndex: " << childPFPIndex << std::endl;
 
             if (childPFPIndex >= kMaxPFParticles)
                 break;
 
+            // Obviously dont make a self-link
             if (parentPFP == childPFP)
                 continue;
 
-            std::cout << "----------------------------" << std::endl;
+            // For higher tier training - skip child primaries
+            if (fRecoPFPTrueVisibleGeneration[childPFPIndex] == 2)
+                continue;
+
+            // Want to only consider particles with a 3D representation
+            const std::vector<art::Ptr<recob::SpacePoint>> childSpacepoints = dune_ana::DUNEAnaPFParticleUtils::GetSpacePoints(childPFP, evt, fRecoModuleLabel);
+
+            if (childSpacepoints.empty())
+                continue;
+        
+            //std::cout << "----------------------------" << std::endl;
 
             // Increase number of links
             linkIndex++;
@@ -1970,7 +1987,7 @@ void FDSelection::CCNuSelection::FillParentChildLinkInfo(art::Event const & evt)
             // Fill reco parent-child link info
             FillRecoParentChildLinkInfo(evt, childPFP, parentPFP, childPFPIndex, parentPFPIndex, linkIndex);
 
-            std::cout << "----------------------------" << std::endl;
+            //std::cout << "----------------------------" << std::endl;
         }
     }
 }
@@ -1998,7 +2015,7 @@ void FDSelection::CCNuSelection::FillTrueParentChildLinkInfo(const int linkIndex
     }
 
     /////////////////////////////////////////
-    std::cout << "fTrueParentChildLink: " << (fTrueParentChildLink[linkIndex] ? "yes" : "no") << std::endl;
+    //std::cout << "fTrueParentChildLink: " << (fTrueParentChildLink[linkIndex] ? "yes" : "no") << std::endl;
     /////////////////////////////////////////
 }
 
@@ -2025,6 +2042,7 @@ void FDSelection::CCNuSelection::FillRecoParentChildLinkInfo(art::Event const & 
     fTrackShowerLinkType[linkIndex] =  HierarchyUtils::GetTrackShowerLinkType(evt, parentPFP, childPFP, fRecoModuleLabel);
 
     /////////////////////////////////////////
+    /*
     std::cout << "fParentTrackScore: " << fParentTrackScore[linkIndex] << std::endl;
     std::cout << "fParentNuVertexSeparation: " << fParentNuVertexSeparation[linkIndex] << std::endl;
     std::cout << "fChildNuVertexSeparation: " << fChildNuVertexSeparation[linkIndex] << std::endl;
@@ -2039,6 +2057,7 @@ void FDSelection::CCNuSelection::FillRecoParentChildLinkInfo(art::Event const & 
     std::cout << "fPIDLinkType: " << fPIDLinkType[linkIndex] << std::endl;
     std::cout << "fOpeningAngle: " << fOpeningAngle[linkIndex] << std::endl;
     std::cout << "fTrackShowerLinkType: " << fTrackShowerLinkType[linkIndex] << std::endl;
+    */
     /////////////////////////////////////////
 }
 

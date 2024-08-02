@@ -289,7 +289,7 @@ int GetPIDLinkType(const int parentPDG, const int childPDG)
     const int absParentPDG = std::abs(parentPDG);
     const int absChildPDG = std::abs(childPDG);
 
-    if ((absParentPDG < 0) || (absChildPDG < 0))
+    if ((parentPDG == DEFAULT_DOUBLE) || (childPDG == DEFAULT_DOUBLE))
         return - 1;
     else if ((absParentPDG == 13) && (absChildPDG == 13))     // mu - mu
         return 0;
@@ -477,7 +477,7 @@ int GetTrackShowerLinkType(art::Event const & evt, const art::Ptr<recob::PFParti
         return -1;
 
     const bool isParentTrack = parentTrackScore > 0.5;
-    const bool isChildTrack = parentTrackScore > 0.5;
+    const bool isChildTrack = childTrackScore > 0.5;
 
     if (isParentTrack && isChildTrack)
         return 0;

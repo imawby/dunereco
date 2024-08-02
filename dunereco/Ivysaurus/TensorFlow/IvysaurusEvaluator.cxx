@@ -96,7 +96,7 @@ ivysaurus::IvysaurusEvaluator::IvysaurusScores ivysaurus::IvysaurusEvaluator::Iv
     const art::Ptr<recob::PFParticle> &pfparticle)
 {
     // Obtain the input grid tensors
-    std::cout << "Making the grid tensors..." << std::endl;
+    //std::cout << "Making the grid tensors..." << std::endl;
     tensorflow::Tensor startTensorU = ObtainInputGridTensor(evt, pfparticle, true, IvysaurusUtils::PandoraView::TPC_VIEW_U);
     tensorflow::Tensor endTensorU = ObtainInputGridTensor(evt, pfparticle, false, IvysaurusUtils::PandoraView::TPC_VIEW_U);
 
@@ -107,23 +107,31 @@ ivysaurus::IvysaurusEvaluator::IvysaurusScores ivysaurus::IvysaurusEvaluator::Iv
     tensorflow::Tensor endTensorW = ObtainInputGridTensor(evt, pfparticle, false, IvysaurusUtils::PandoraView::TPC_VIEW_W);
 
     // Obtain the input track variable tensors
-    std::cout << "Making the track variable tensors..." << std::endl;
+    //std::cout << "Making the track variable tensors..." << std::endl;
     tensorflow::Tensor trackVarTensor = ObtainInputTrackTensor(evt, pfparticle);
 
+    ////////////////////////////////////////////////////////
+    /*
     auto trackVarTensorMap = trackVarTensor.tensor<float, 2>();
     for (int i = 0; i < m_nTrackVars; ++i)
         std::cout << "trackVarTensorMap(0, i): " << trackVarTensorMap(0, i) << std::endl;
+    */
+    ////////////////////////////////////////////////////////
 
     // Obtain the input shower variable tensors
-    std::cout << "Making the shower variable tensors..." << std::endl;
+    //std::cout << "Making the shower variable tensors..." << std::endl;
     tensorflow::Tensor showerVarTensor = ObtainInputShowerTensor(evt, pfparticle);
 
+    ////////////////////////////////////////////////////////
+    /*
     auto showerVarTensorMap = showerVarTensor.tensor<float, 2>();
     for (int i = 0; i < m_nShowerVars; ++i)
         std::cout << "showerVarTensorMap(0, i): " << showerVarTensorMap(0, i) << std::endl;
+    */
+    ////////////////////////////////////////////////////////
 
     // Link the data with some tags so tensorflow know where to put those data entries.
-    std::cout << "Hooking up input/output layers..." << std::endl;
+    //std::cout << "Hooking up input/output layers..." << std::endl;
     std::vector<std::pair<std::string, tensorflow::Tensor>> feedInputs = {{"serving_default_input_1:0", startTensorU}, {"serving_default_input_2:0", endTensorU},
                                                                           {"serving_default_input_3:0", startTensorV}, {"serving_default_input_4:0", endTensorV},  
                                                                           {"serving_default_input_5:0", startTensorW}, {"serving_default_input_6:0", endTensorW},
@@ -135,16 +143,16 @@ ivysaurus::IvysaurusEvaluator::IvysaurusScores ivysaurus::IvysaurusEvaluator::Iv
     std::vector<tensorflow::Tensor> outputs;
 
     // Let's run the model...
-    std::cout << "Running the model..." << std::endl;
+    //std::cout << "Running the model..." << std::endl;
     auto status = m_savedModelBundle.GetSession()->Run(feedInputs, fetches, {}, &outputs);
 
     // ... and print out it's predictions.
-    std::cout << "What does the model predict?..." << std::endl;
+    //std::cout << "What does the model predict?..." << std::endl;
     IvysaurusScores ivysaurusScores;
 
     if (!status.ok())
     {
-        std::cout << "status not okay, returning...." << std::endl;
+        //std::cout << "status not okay, returning...." << std::endl;
         return ivysaurusScores;
     }
 
@@ -172,6 +180,8 @@ ivysaurus::IvysaurusEvaluator::IvysaurusScores ivysaurus::IvysaurusEvaluator::Iv
         ++count;
     }
 
+    ////////////////////////////////////////////////////////
+    /*
     std::cout << "found an ivysaurus score!!!" << std::endl;
     std::cout << "muonScore: " << ivysaurusScores.m_muonScore << std::endl;
     std::cout << "protonScore: " << ivysaurusScores.m_protonScore << std::endl;
@@ -180,6 +190,8 @@ ivysaurus::IvysaurusEvaluator::IvysaurusScores ivysaurus::IvysaurusEvaluator::Iv
     std::cout << "photonScore: " << ivysaurusScores.m_photonScore << std::endl;
     std::cout << "otherScore: " << ivysaurusScores.m_otherScore << std::endl;
     std::cout << "particleType: " << ivysaurusScores.m_particleType << std::endl;
+    */
+    ////////////////////////////////////////////////////////
 
     TF_CHECK_OK(status);
 
@@ -196,9 +208,6 @@ tensorflow::Tensor ivysaurus::IvysaurusEvaluator::ObtainInputGridTensor(const ar
 
     tensorflow::Tensor gridTensor(tensorflow::DT_FLOAT, tensorflow::TensorShape({ 1, grid.GetAxisDimensions(), grid.GetAxisDimensions(), 1 }));
 
-    std::cout << "grid elements: " << std::endl;
-    std::cout << "grid.GetAxisDimensions(): " << grid.GetAxisDimensions() << std::endl;
-
     // Fill the tensors
     auto tensorMap = gridTensor.tensor<float, 4>();
 
@@ -207,7 +216,6 @@ tensorflow::Tensor ivysaurus::IvysaurusEvaluator::ObtainInputGridTensor(const ar
         for (unsigned int wireIndex = 0; wireIndex < grid.GetAxisDimensions(); ++wireIndex)
         {
             tensorMap(0, driftIndex, wireIndex, 0) = grid.GetGridValues().at(driftIndex).at(wireIndex);
-            //std::cout << "(" << driftIndex << ", " << wireIndex << "): " << grid.GetGridValues().at(driftIndex).at(wireIndex) << std::endl;
         }
     } 
 
