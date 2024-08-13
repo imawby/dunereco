@@ -179,9 +179,9 @@ void FDSelection::PandizzleAlg::Run(const art::Event& evt)
     if (!dune_ana::DUNEAnaPFParticleUtils::IsTrack(childPFP, evt, fRecoModuleLabel, fTrackModuleLabel))
       continue;
 
+    ResetTreeVariables();
     ProcessPFParticle(childPFP, evt);
     FillTree();
-    ResetTreeVariables();
   }
   
   return;

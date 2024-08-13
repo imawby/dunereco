@@ -73,6 +73,7 @@ physics.analyzers.ccnuselection.RecoModuleLabel:             "pandora"
 physics.analyzers.ccnuselection.VertexModuleLabel:           "pandora"
 physics.analyzers.ccnuselection.SpacePointModuleLabel:       "pandora"
 physics.analyzers.ccnuselection.ClusterModuleLabel:          "pandora"
+physics.analyzers.ccnuselection.MakeSelectionTrainingTrees:   true
 
 # Pandizzle config
 physics.analyzers.ccnuselection.PandizzleConfig.PandizzleWeightFileName:    "MCC11_FHC_Pandizzle_TMVAClassification_BDTG_standard.weights.xml"
@@ -80,6 +81,7 @@ physics.analyzers.ccnuselection.PandizzleConfig.ShowerModuleLabel:          "pan
 physics.analyzers.ccnuselection.PandizzleConfig.TrackModuleLabel:           "pandoraTrack"
 physics.analyzers.ccnuselection.PandizzleConfig.PIDModuleLabel:             "warwickPID"
 physics.analyzers.ccnuselection.PandizzleConfig.RecoModuleLabel:            "pandora"
+physics.analyzers.ccnuselection.PandizzleConfig.MakeSelectionTrainingTrees:  true
 
 # Pandrizzle config
 physics.analyzers.ccnuselection.PandrizzleConfig.RecoModuleLabel:                  "pandora"
@@ -92,5 +94,6 @@ physics.analyzers.ccnuselection.PandrizzleConfig.UseDCA:                        
 physics.analyzers.ccnuselection.PandrizzleConfig.UseModularShowerVariables:         false
 physics.analyzers.ccnuselection.PandrizzleConfig.EnhancedPandrizzleWeightFileName: ""
 physics.analyzers.ccnuselection.PandrizzleConfig.PandrizzleWeightFileName:         "MCC11_FHC_Pandrizzle_TMVAClassification_BDTG_standard.weights.xml"
+physics.analyzers.ccnuselection.PandrizzleConfig.MakeSelectionTrainingTrees:        true
 ########################################################################
 
