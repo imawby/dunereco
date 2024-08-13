@@ -1,0 +1,22 @@
+BEGIN_PROLOG
+
+highest_pandrizzle_selector:
+{ 
+    tool_type:                      "HighestPandrizzleScoreRecoVertexShowerSelector"
+
+    RecoModuleLabel:                     "pandora"
+    ShowerModuleLabel:                   "pandoraShower"
+    PIDModuleLabel:                      "pid"
+    EnhancedPandrizzleWeightFileName:    ""
+    PandrizzleWeightFileName:            "MCC11_FHC_Pandrizzle_TMVAClassification_BDTG_standard.weights.xml"
+    MakeSelectionTrainingTrees:           false
+    BackupPandrizzleHitCut:               25
+    EnhancedPandrizzleHitCut:             100
+    UseBDTVariables:                      false
+    UseConcentration:                     true
+    UseDisplacement:                      true
+    UseDCA:                               true
+    UseModularShowerVariables:            false
+}
+
+END_PROLOG
