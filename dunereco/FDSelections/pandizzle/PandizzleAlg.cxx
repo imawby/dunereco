@@ -57,18 +57,18 @@ FDSelection::PandizzleAlg::PandizzleAlg(const fhicl::ParameterSet& pset) :
 {
   Reset(fInputsToReader);
 
-  fPandizzleReader.AddVariable("MichelNHits", GetVarPtr(kMichelNHits));
-  fPandizzleReader.AddVariable("MichelElectronMVA", GetVarPtr(kMichelElectronMVA)); 
-  fPandizzleReader.AddVariable("MichelRecoEnergyPlane2", GetVarPtr(kMichelRecoEnergyPlane2));
-  fPandizzleReader.AddVariable("DeflecAngleSD", GetVarPtr(kTrackDeflecAngleSD));
-  fPandizzleReader.AddVariable("Length", GetVarPtr(kTrackLength));
-  fPandizzleReader.AddVariable("EvalRatio", GetVarPtr(kEvalRatio));
-  fPandizzleReader.AddVariable("Concentration", GetVarPtr(kConcentration));
-  fPandizzleReader.AddVariable("CoreHaloRatio", GetVarPtr(kCoreHaloRatio));
-  fPandizzleReader.AddVariable("Conicalness", GetVarPtr(kConicalness));
-  fPandizzleReader.AddVariable("dEdxStart", GetVarPtr(kdEdxStart));
-  fPandizzleReader.AddVariable("dEdxEnd", GetVarPtr(kdEdxEnd));
-  fPandizzleReader.AddVariable("dEdxEndRatio", GetVarPtr(kdEdxEndRatio));
+  fPandizzleReader.AddVariable("PFPMichelNHits", GetVarPtr(kMichelNHits));
+  fPandizzleReader.AddVariable("PFPMichelElectronMVA", GetVarPtr(kMichelElectronMVA)); 
+  fPandizzleReader.AddVariable("PFPMichelRecoEnergyPlane2", GetVarPtr(kMichelRecoEnergyPlane2));
+  fPandizzleReader.AddVariable("PFPTrackDeflecAngleSD", GetVarPtr(kTrackDeflecAngleSD));
+  fPandizzleReader.AddVariable("PFPTrackLength", GetVarPtr(kTrackLength));
+  fPandizzleReader.AddVariable("PFPTrackEvalRatio", GetVarPtr(kEvalRatio));
+  fPandizzleReader.AddVariable("PFPTrackConcentration", GetVarPtr(kConcentration));
+  fPandizzleReader.AddVariable("PFPTrackCoreHaloRatio", GetVarPtr(kCoreHaloRatio));
+  fPandizzleReader.AddVariable("PFPTrackConicalness", GetVarPtr(kConicalness));
+  fPandizzleReader.AddVariable("PFPTrackdEdxStart", GetVarPtr(kdEdxStart));
+  fPandizzleReader.AddVariable("PFPTrackdEdxEnd", GetVarPtr(kdEdxEnd));
+  fPandizzleReader.AddVariable("PFPTrackdEdxEndRatio", GetVarPtr(kdEdxEndRatio));
 
   const std::string weightFileName(fPandizzleWeightFileName);
   std::string weightFilePath;
