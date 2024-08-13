@@ -330,6 +330,10 @@ private:
   std::string fPOTModuleLabel;
   std::string fCVNModuleLabel;
   ////////////////////////////////////////
+  //Modes
+  ////////////////////////////////////////
+  bool fMakeSelectionTrainingTrees;
+  ////////////////////////////////////////
   //Algs
   ////////////////////////////////////////
   PandizzleAlg fPandizzleAlg;
@@ -358,11 +362,12 @@ FDSelection::CCNuSelection::CCNuSelection(fhicl::ParameterSet const & pset) :
   fHitsModuleLabel(pset.get<std::string>("HitsModuleLabel")),
   fPOTModuleLabel(pset.get<std::string>("POTModuleLabel")),
   fCVNModuleLabel(pset.get<std::string>("CVNModuleLabel")),
+  fMakeSelectionTrainingTrees(pset.get<bool>("MakeSelectionTrainingTrees")),
   fPandizzleAlg(pset.get<fhicl::ParameterSet>("PandizzleConfig")),
   fPandrizzleAlg(pset.get<fhicl::ParameterSet>("PandrizzleConfig")),
   fCalorimetryAlg(pset.get<fhicl::ParameterSet>("CalorimetryAlg")),
   fNeutrinoEnergyRecoAlg(pset.get<fhicl::ParameterSet>("NeutrinoEnergyRecoAlg"), fTrackModuleLabel, fShowerModuleLabel,
-      fHitsModuleLabel, fWireModuleLabel, fTrackModuleLabel, fShowerModuleLabel, fRecoModuleLabel)
+                         fHitsModuleLabel, fWireModuleLabel, fTrackModuleLabel, fShowerModuleLabel, fRecoModuleLabel)
 {
 }
 
@@ -371,6 +376,12 @@ FDSelection::CCNuSelection::CCNuSelection(fhicl::ParameterSet const & pset) :
 void FDSelection::CCNuSelection::analyze(art::Event const & evt)
 {
     Reset();
+
+    if (fMakeSelectionTrainingTrees)
+    {
+        fPandizzleAlg.Run(evt);
+        fPandrizzleAlg.Run(evt);
+    }
 
     fRun = evt.run();
     fSubRun = evt.subRun();

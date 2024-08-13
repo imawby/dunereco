@@ -223,27 +223,6 @@ void FDSelection::PandrizzleAlg::InitialiseTrees() {
     BookTreeFloat(tree, "ModularShowerProjectedInitialGapSize");
     BookTreeFloat(tree, "ModularShowerGlobalInitialGapSize");
     BookTreeFloat(tree, "ModularShowerLargestProjectedGapSize");
-
-    // For drawing purposes
-    //BookTreeFloat(tree, "StartX");
-    //BookTreeFloat(tree, "StartY");
-    //BookTreeFloat(tree, "StartZ");
-    //BookTreeFloat(tree, "EndX");
-    //BookTreeFloat(tree, "EndY");
-    //BookTreeFloat(tree, "EndZ");
-    //BookTreeFloat(tree, "StartPX");
-    //BookTreeFloat(tree, "StartPY");
-    //BookTreeFloat(tree, "StartPZ");
-    //BookTreeFloat(tree, "EndPX");
-    //BookTreeFloat(tree, "EndPY");
-    //BookTreeFloat(tree, "EndPZ");
-
-    //fVarHolder.m_trajPositionX = std::vector<float>();
-    //fVarHolder.m_trajPositionY = std::vector<float>();
-    //fVarHolder.m_trajPositionZ = std::vector<float>();
-    //tree->Branch("TrajPositionX", &fVarHolder.m_trajPositionX);
-    //tree->Branch("TrajPositionY", &fVarHolder.m_trajPositionY);
-    //tree->Branch("TrajPositionZ", &fVarHolder.m_trajPositionZ);
   }
 }
 
@@ -285,9 +264,9 @@ void FDSelection::PandrizzleAlg::Run(const art::Event& evt)
     if (!dune_ana::DUNEAnaPFParticleUtils::IsShower(childPFP, evt, fRecoModuleLabel, fShowerModuleLabel))
       continue;
 
+    ResetTreeVariables();
     ProcessPFParticle(childPFP, evt);
     FillTree();
-    ResetTreeVariables();
   }
 
   return;
