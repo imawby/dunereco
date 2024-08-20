@@ -15,6 +15,8 @@
 #include "dunereco/AnaUtils/DUNEAnaSpacePointUtils.h"
 #include "dunereco/FDSelections/HierarchyUtils.h"
 
+#include "TPrincipal.h"
+
 namespace HierarchyUtils
 {
 
@@ -256,6 +258,271 @@ double GetSeparation3D(art::Event const & evt, const art::Ptr<recob::PFParticle>
 }
 
 /////////////////////////////////////////////////////////////
+
+// Implement reverse by working out which end is closer?
+
+void GetLinkConnectionInfo(art::Event const & evt, const art::Ptr<recob::PFParticle> parentPFP, const art::Ptr<recob::PFParticle> childPFP, 
+    const std::string recoModuleLabel, const std::string trackModuleLabel, std::map<std::string, double> &connectionVars)
+{
+    connectionVars["DoesChildConnect"] = false;
+    connectionVars["UnderOvershootDCA"] = DEFAULT_DOUBLE;
+    connectionVars["ChildConnectionX"] = DEFAULT_DOUBLE;
+    connectionVars["ChildConnectionY"] = DEFAULT_DOUBLE;
+    connectionVars["ChildConnectionZ"] = DEFAULT_DOUBLE;
+    connectionVars["ChildConnectionDX"] = DEFAULT_DOUBLE;
+    connectionVars["ChildConnectionDY"] = DEFAULT_DOUBLE;
+    connectionVars["ChildConnectionDZ"] = DEFAULT_DOUBLE;
+    connectionVars["ChildDCA"] = DEFAULT_DOUBLE;
+    connectionVars["ChildConnectionDCA"] = DEFAULT_DOUBLE;
+    connectionVars["TrackLength"] = DEFAULT_DOUBLE;
+    connectionVars["ChildConnectionL"] = DEFAULT_DOUBLE;
+    connectionVars["ChildConnectionLRatio"] = DEFAULT_DOUBLE;
+
+    TVector3 childVertex = TVector3(0.0, 0.0, 0.0);
+
+    // Get child direction
+    try
+    {
+        const art::Ptr<recob::Vertex> &childRecobVertex = dune_ana::DUNEAnaPFParticleUtils::GetVertex(childPFP, evt, recoModuleLabel);
+        childVertex = TVector3(childRecobVertex->position().X(), childRecobVertex->position().Y(), childRecobVertex->position().Z());
+    }
+    catch (...)
+    {
+        return;
+    }
+
+    // Get parent track, and check that it's good before we do the heavy lifting
+    if (!HierarchyUtils::IsPandoraApprovedTrack(evt, parentPFP, recoModuleLabel, trackModuleLabel))
+        return;
+
+    const art::Ptr<recob::Track> &parentTrack = dune_ana::DUNEAnaPFParticleUtils::GetTrack(parentPFP, evt, recoModuleLabel, trackModuleLabel);
+
+    const int nTrajPoints = parentTrack->NumberTrajectoryPoints();
+
+    if (nTrajPoints < 1)
+        return;
+
+    // Alright heavy lifting, get child direction
+    TVector3 childDirection(0.f, 0.f, 0.f);
+
+    // I know the 25cm is hard coded... shhhh...
+    if (!HierarchyUtils::GetParticleDirection(evt, childPFP, recoModuleLabel, 25.0, childDirection))
+        return;
+
+    // Now loop through trajectory points - we can work out several things here...
+    double cumulativeL = 0.0;
+
+    // Loop through trajectory points
+    for (int i = 0; i < (nTrajPoints - 1); ++i)
+    {
+        const TVector3 firstPoint = TVector3(parentTrack->TrajectoryPoint(i).position.X(), parentTrack->TrajectoryPoint(i).position.Y(), parentTrack->TrajectoryPoint(i).position.Z());
+        const TVector3 secondPoint = TVector3(parentTrack->TrajectoryPoint(i+1).position.X(), parentTrack->TrajectoryPoint(i+1).position.Y(), parentTrack->TrajectoryPoint(i+1).position.Z());
+        const TVector3 midPoint = (secondPoint + firstPoint) * 0.5;
+
+        // Extrapolate the child to the parent
+        const TVector3 parentTrackEnd = TVector3(parentTrack->End().X(), parentTrack->End().Y(), parentTrack->End().Z());
+        const double extrapFactor((childVertex - midPoint).Dot(childDirection));
+        const TVector3 extrapPoint = childVertex + (extrapFactor * childDirection);
+
+        // Work out DCA
+        const float thisDCA = (midPoint - extrapPoint).Mag();
+
+        if (thisDCA < std::fabs(connectionVars["ChildDCA"]))
+        {
+            connectionVars["ChildDCA"] = thisDCA;
+
+            // Does this connect - be very loose?
+            const float buffer = 5.0;
+            if (HierarchyUtils::IsInBoundingBox(firstPoint, secondPoint, extrapPoint, buffer))
+            {
+                connectionVars["DoesChildConnect"] = true;
+                connectionVars["ChildConnectionDCA"] = thisDCA;
+                connectionVars["ChildConnectionL"] = cumulativeL + (midPoint - firstPoint).Mag();
+                connectionVars["ChildConnectionX"] = midPoint.X();
+                connectionVars["ChildConnectionY"] = midPoint.Y();
+                connectionVars["ChildConnectionZ"] = midPoint.Z();
+
+                const TVector3 midPointDir = (secondPoint - firstPoint).Unit();
+
+                connectionVars["ChildConnectionDX"] = midPointDir.X();
+                connectionVars["ChildConnectionDY"] = midPointDir.Y();
+                connectionVars["ChildConnectionDZ"] = midPointDir.Z();
+            }
+        }
+
+        // Whilst we're here, we might as well work out the track length
+        cumulativeL += (secondPoint - firstPoint).Mag();
+    }
+
+
+    connectionVars["TrackLength"] = cumulativeL;
+
+    if (connectionVars["DoesChildConnect"])
+        connectionVars["ChildConnectionLRatio"] = (connectionVars["TrackLength"]  < std::numeric_limits<double>::epsilon()) ? 
+            DEFAULT_DOUBLE : connectionVars["ChildConnectionL"] / connectionVars["TrackLength"];
+
+    if (!connectionVars["DoesChildConnect"])
+    {
+        const TVector3 parentTrackStart = TVector3(parentTrack->Start().X(), parentTrack->Start().Y(), parentTrack->Start().Z());
+        const TVector3 parentTrackEnd = TVector3(parentTrack->End().X(), parentTrack->End().Y(), parentTrack->End().Z());
+        const double gamma_start((childVertex - parentTrackStart).Dot(childDirection));
+        const double gamma_end((childVertex - parentTrackEnd).Dot(childDirection));
+        const TVector3 extrap_start = childVertex + (gamma_start * childDirection);
+        const TVector3 extrap_end = childVertex + (gamma_end * childDirection);
+        const float dca_start = (extrap_start - parentTrackStart).Mag();
+        const float dca_end = (extrap_end - parentTrackEnd).Mag();
+
+        connectionVars["UnderOvershootDCA"] = std::min(dca_start, dca_end);
+    }
+
+    // I know the 10cm is hard coded... shhhh...
+    HierarchyUtils::GetParentConnectionPointVars(evt, parentPFP, recoModuleLabel, 10.0, connectionVars);
+}
+
+/////////////////////////////////////////////////////////////
+
+bool IsPandoraApprovedTrack(art::Event const & evt, const art::Ptr<recob::PFParticle> pfp, const std::string recoModuleLabel, 
+    const std::string trackModuleLabel)
+{
+    const bool isPandoraTrack = (HierarchyUtils::GetTrackScore(evt, pfp, recoModuleLabel) > 0.5);
+
+    if (!isPandoraTrack)
+        return false;
+
+    if (!dune_ana::DUNEAnaPFParticleUtils::IsTrack(pfp, evt, recoModuleLabel, trackModuleLabel))
+        return false;
+
+    return true;
+}
+
+
+/////////////////////////////////////////////////////////////
+
+bool IsInBoundingBox(const TVector3 &boundary1, const TVector3 &boundary2, const TVector3 &testPoint, const float buffer)
+{
+    const double minX = std::min(boundary1.X(), boundary2.X()) - buffer;
+    const double maxX = std::max(boundary1.X(), boundary2.X()) + buffer;
+    const double minY = std::min(boundary1.Y(), boundary2.Y()) - buffer;
+    const double maxY = std::max(boundary1.Y(), boundary2.Y()) + buffer;
+    const double minZ = std::min(boundary1.Z(), boundary2.Z()) - buffer;
+    const double maxZ = std::max(boundary1.Z(), boundary2.Z()) + buffer;
+
+    if ((testPoint.X() < minX) || (testPoint.X() > maxX))
+        return false;
+
+    if ((testPoint.Y() < minY) || (testPoint.Y() > maxY))
+        return false;
+
+    if ((testPoint.Z() < minZ) || (testPoint.Z() > maxZ))
+        return false;
+
+    return true;
+}
+
+/////////////////////////////////////////////////////////////
+
+void GetParentConnectionPointVars(art::Event const & evt, const art::Ptr<recob::PFParticle> parentPFP,
+    const std::string recoModuleLabel, const double searchRegion, std::map<std::string, double> &connectionVars)
+{
+    // Ratios taken downstream/upstream
+    connectionVars["ParentConnectionNUpstreamHits"] = DEFAULT_DOUBLE;
+    connectionVars["ParentConnectionNDownstreamHits"] = DEFAULT_DOUBLE;
+    connectionVars["ParentConnectionNHitRatio"] = DEFAULT_DOUBLE;
+    connectionVars["ParentConnectionEigenValueRatio"] = DEFAULT_DOUBLE;
+    connectionVars["ParentConnectionOpeningAngle"] = DEFAULT_DOUBLE;
+
+    // Does it connect?
+    if (!connectionVars["DoesChildConnect"])
+        return;
+
+    // Find the connection point on the parent
+    const TVector3 parentConnectionPoint = TVector3(connectionVars["ChildConnectionX"], 
+        connectionVars["ChildConnectionY"], connectionVars["ChildConnectionZ"]);
+    const TVector3 parentConnectionDir = TVector3(connectionVars["ChildConnectionDX"], 
+        connectionVars["ChildConnectionDY"], connectionVars["ChildConnectionDZ"]);
+
+    // Use direction to current direction to split spacepoints into two groups
+    const std::vector<art::Ptr<recob::SpacePoint>> parentSPs = dune_ana::DUNEAnaPFParticleUtils::GetSpacePoints(parentPFP, evt, recoModuleLabel); 
+
+    if (parentSPs.empty())
+        return;
+
+    std::vector<art::Ptr<recob::SpacePoint>> upstreamGroup;
+    std::vector<art::Ptr<recob::SpacePoint>> downstreamGroup;
+
+    for (const art::Ptr<recob::SpacePoint> &parentSP : parentSPs)
+    {
+        const TVector3 parentSPPos = TVector3(parentSP->position().X(), parentSP->position().Y(), parentSP->position().Z());
+
+        const float dx = std::fabs(parentSPPos.X() - parentConnectionPoint.X());
+        const float dy = std::fabs(parentSPPos.Y() - parentConnectionPoint.Y());
+        const float dz = std::fabs(parentSPPos.Z() - parentConnectionPoint.Z());
+        const float sepSq = (dx * dx) + (dy * dy) + (dz * dz);
+
+        if (sepSq > (searchRegion * searchRegion))
+            continue;
+
+        // Assign to group
+        const double thisL = parentConnectionDir.Dot(parentSPPos - parentConnectionPoint);
+
+        std::vector<art::Ptr<recob::SpacePoint>> &group = (thisL > 0) ? downstreamGroup : upstreamGroup;
+        group.push_back(parentSP);
+    }
+
+    connectionVars["ParentConnectionNUpstreamHits"] = upstreamGroup.size();
+    connectionVars["ParentConnectionNDownstreamHits"] = downstreamGroup.size();
+
+    if ((upstreamGroup.size() == 0) || (downstreamGroup.size() == 0))
+        return;
+
+    connectionVars["ParentConnectionNHitRatio"] = connectionVars["ParentConnectionNDownstreamHits"] / connectionVars["ParentConnectionNUpstreamHits"];
+
+    // Now do PCA
+    std::vector<double> upstreamEigenvalues;
+    std::vector<TVector3> upstreamEigenvectors;
+    HierarchyUtils::RunPCA(upstreamGroup, upstreamEigenvalues, upstreamEigenvectors);
+
+    std::vector<double> downstreamEigenvalues;
+    std::vector<TVector3> downstreamEigenvectors;
+    HierarchyUtils::RunPCA(downstreamGroup, downstreamEigenvalues, downstreamEigenvectors);
+
+    // Get opening angle from first eigenvectors (this is the longitudinal one)
+    connectionVars["ParentConnectionOpeningAngle"] = upstreamEigenvectors.at(0).Angle(downstreamEigenvectors.at(0)) * 180.0 / M_PI;
+
+    // Get average transverse eigenvalues, get ratio
+    const double upstreamAvTransverseE = (upstreamEigenvalues.at(1) + upstreamEigenvalues.at(2)) / 2.0;
+    const double downstreamAvTransverseE = (downstreamEigenvalues.at(1) + downstreamEigenvalues.at(2)) / 2.0;
+
+    connectionVars["ParentConnectionEigenValueRatio"] = downstreamAvTransverseE / upstreamAvTransverseE;
+}
+
+/////////////////////////////////////////////////////////////
+
+void RunPCA(const std::vector<art::Ptr<recob::SpacePoint>> &spacepoints, std::vector<double> &eVals, std::vector<TVector3> &eVecs)
+{
+    TPrincipal* principal = new TPrincipal(3, "D");
+
+    for (const art::Ptr<recob::SpacePoint> &spacepoint : spacepoints)
+        principal->AddRow(spacepoint->XYZ());
+
+    // PERFORM PCA
+    principal->MakePrincipals();
+    // GET EIGENVALUES AND EIGENVECTORS
+    for (unsigned int i = 0; i < 3; ++i)
+         eVals.push_back(principal->GetEigenValues()->GetMatrixArray()[i]);
+
+    for (int i : {0, 3, 6})
+    {
+        const double eVec_x = principal->GetEigenVectors()->GetMatrixArray()[i];
+        const double eVec_y = principal->GetEigenVectors()->GetMatrixArray()[i + 1];
+        const double eVec_z = principal->GetEigenVectors()->GetMatrixArray()[i + 2];
+
+        eVecs.push_back(TVector3(eVec_x, eVec_y, eVec_z));
+    }
+}
+
+
+/////////////////////////////////////////////////////////////
 // ratio = child / parent
 
 double GetChargeRatio(art::Event const & evt, const art::Ptr<recob::PFParticle> parentPFP, const art::Ptr<recob::PFParticle> childPFP, 
@@ -284,7 +551,25 @@ double GetPFPCharge(art::Event const & evt, const art::Ptr<recob::PFParticle> pf
 
 /////////////////////////////////////////////////////////////
 
-int GetPIDLinkType(const int parentPDG, const int childPDG)
+int GetPIDLinkTypeWithIvysaurus(const int parentParticleType, const int childParticleType)
+{
+    int absParentPDG = DEFAULT_DOUBLE;
+    int absChildPDG = DEFAULT_DOUBLE;
+
+    std::vector<int> pdg = {13, 2212, 211, 11, 22};
+
+    if ((parentParticleType >= 0) && (parentParticleType <= 4))
+        absParentPDG = pdg.at(parentParticleType);
+
+    if ((childParticleType >= 0) && (childParticleType <= 4))
+        absChildPDG = pdg.at(childParticleType);
+
+    return HierarchyUtils::GetPIDLinkTypeWithPDG(absParentPDG, absChildPDG);
+}
+
+/////////////////////////////////////////////////////////////
+
+int GetPIDLinkTypeWithPDG(const int parentPDG, const int childPDG)
 {
     const int absParentPDG = std::abs(parentPDG);
     const int absChildPDG = std::abs(childPDG);

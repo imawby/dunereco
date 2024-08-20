@@ -28,6 +28,8 @@
 #include <vector>
 #include <map>
 
+// add private??
+
 namespace HierarchyUtils
 {
 
@@ -58,12 +60,27 @@ namespace HierarchyUtils
  double GetSeparation3D(art::Event const & evt, const art::Ptr<recob::PFParticle> parentPFP, const art::Ptr<recob::PFParticle> childPFP, 
      const std::string recoModuleLabel);
 
+ void GetLinkConnectionInfo(art::Event const & evt, const art::Ptr<recob::PFParticle> parentPFP, const art::Ptr<recob::PFParticle> childPFP, 
+     const std::string recoModuleLabel, const std::string trackModuleLabel, std::map<std::string, double> &connectionVars);
+
+ bool IsPandoraApprovedTrack(art::Event const & evt, const art::Ptr<recob::PFParticle> pfp, const std::string recoModuleLabel, 
+     const std::string trackModuleLabel);
+
+ bool IsInBoundingBox(const TVector3 &boundary1, const TVector3 &boundary2, const TVector3 &testPoint, const float buffer);
+
+ void GetParentConnectionPointVars(art::Event const & evt, const art::Ptr<recob::PFParticle> parentPFP,
+     const std::string recoModuleLabel, const double searchRegion, std::map<std::string, double> &connectionVars);
+
+ void RunPCA(const std::vector<art::Ptr<recob::SpacePoint>> &spacepoints, std::vector<double> &eVals, std::vector<TVector3> &eVecs);
+
  double GetChargeRatio(art::Event const & evt, const art::Ptr<recob::PFParticle> parentPFP, const art::Ptr<recob::PFParticle> childPFP, 
      const std::string recoModuleLabel);
 
  double GetPFPCharge(art::Event const & evt, const art::Ptr<recob::PFParticle> pfp, const std::string recoModuleLabel);
 
- int GetPIDLinkType(const int parentPDG, const int childPDG);
+ int GetPIDLinkTypeWithIvysaurus(const int parentParticleType, const int childParticleType);
+
+ int GetPIDLinkTypeWithPDG(const int parentPDG, const int childPDG);
 
  double GetOpeningAngle(art::Event const & evt, const art::Ptr<recob::PFParticle> parentPFP, const art::Ptr<recob::PFParticle> childPFP, 
     const std::string recoModuleLabel);

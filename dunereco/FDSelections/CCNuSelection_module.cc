@@ -103,12 +103,13 @@ private:
   void FillPFParticleInfo(art::Event const & evt);
   void FillChildPFPInformation(art::Ptr<recob::PFParticle> const pfp, art::Event const & evt, int &n_child_pfp, int &n_child_track_pfp, int &n_child_shower_pfp);
   void FillHierarchyInfo(art::Event const & evt);
-  void SetRecoGenerationInfo(art::Event const & evt, const art::Ptr<recob::PFParticle> &pfp, int &recoGeneration, int &recoParentSelf, int &recoParentPDG);
+  void SetRecoGenerationInfo(art::Event const & evt, const art::Ptr<recob::PFParticle> &pfp, int &recoGeneration, int &recoParentSelf, int &recoParentPDG, int &recoParentTrackID);
   void SetTrueGenerationInfo(art::Event const & evt, const int pfpIndex, const bool visibleMode, int &trueGeneration, int &trueParentTrackID, int &trueParentPDG);
   void FillRecoTrackInfo(art::Event const & evt, const art::Ptr<recob::PFParticle> &pfp, const int pfpCounter);
   void FillRecoShowerInfo(art::Event const & evt, const art::Ptr<recob::PFParticle> &pfp, const int pfpCounter);
   void FillParentChildLinkInfo(art::Event const & evt);
   void FillTrueParentChildLinkInfo(const int linkIndex, const int parentPFPIndex, const int childPFPIndex);
+  bool IsHigherTierTrainingLink(const int linkIndex, const int parentPFPIndex, const int childPFPIndex);
   void FillRecoParentChildLinkInfo(art::Event const & evt, const art::Ptr<recob::PFParticle> childPFP, 
     art::Ptr<recob::PFParticle> parentPFP, const int childIndex, const int parentIndex, const int linkIndex);
   void RunTrackSelection(art::Event const & evt);
@@ -244,12 +245,14 @@ private:
   double fRecoPFPTrackShowerScore[kMaxPFParticles];
   int fRecoPFPTrackShowerPDG[kMaxPFParticles];
   int fRecoPFPRecoNHits[kMaxPFParticles];
+  int fRecoPFPRecoNSpacepoints[kMaxPFParticles];
   std::vector<std::vector<double>> fRecoPFPSpacepointX;
   std::vector<std::vector<double>> fRecoPFPSpacepointY;
   std::vector<std::vector<double>> fRecoPFPSpacepointZ;
   int fRecoPFPRecoGeneration[kMaxPFParticles];
   int fRecoPFPRecoParentSelf[kMaxPFParticles];
   int fRecoPFPRecoParentPDG[kMaxPFParticles];
+  int fRecoPFPRecoParentTrackID[kMaxPFParticles];
   int fRecoPFPShowerFitSuccess[kMaxPFParticles];
   int fRecoPFPTrackFitSuccess[kMaxPFParticles];
   double fRecoPFPRecoCompleteness[kMaxPFParticles];
@@ -379,6 +382,7 @@ private:
   ////////////////////////////////////////
   // Truth
   bool fTrueParentChildLink[kMaxParentChildLinks];
+  bool fIsHigherTierTrainingLink[kMaxParentChildLinks];
   // Reco
   int fNParentChildLinks;
   // Parent information
@@ -390,15 +394,31 @@ private:
   double fParentEndRegionNParticles[kMaxParentChildLinks];
   double fParentEndRegionRToWall[kMaxParentChildLinks];
   // Edge information
-  double fParentPFPIndex[kMaxParentChildLinks];
-  double fChildPFPIndex[kMaxParentChildLinks];
+  int fParentPFPIndex[kMaxParentChildLinks];
+  int fChildPFPIndex[kMaxParentChildLinks];
   double fVertexSeparation[kMaxParentChildLinks];
-  double fSeparationU[kMaxParentChildLinks];
-  double fSeparationV[kMaxParentChildLinks];
-  double fSeparationW[kMaxParentChildLinks];
   double fSeparation3D[kMaxParentChildLinks];
+  double fChildDCA[kMaxParentChildLinks];
+  double fChildDCA_reverse[kMaxParentChildLinks];
+  double fChildConnectionLRatio[kMaxParentChildLinks];
+  double fChildConnectionLRatio_reverse[kMaxParentChildLinks];
+  double fLUnderOvershoot[kMaxParentChildLinks];
+  double fLUnderOvershoot_reverse[kMaxParentChildLinks];
+  bool fDoesChildConnect[kMaxParentChildLinks];
+  bool fDoesChildConnect_reverse[kMaxParentChildLinks];
+  double fParentConnectionPointNUpstreamHits[kMaxParentChildLinks];
+  double fParentConnectionPointNUpstreamHits_reverse[kMaxParentChildLinks];
+  double fParentConnectionPointNDownstreamHits[kMaxParentChildLinks];
+  double fParentConnectionPointNDownstreamHits_reverse[kMaxParentChildLinks];
+  double fParentConnectionPointNHitRatio[kMaxParentChildLinks];
+  double fParentConnectionPointNHitRatio_reverse[kMaxParentChildLinks];
+  double fParentConnectionPointEigenValueRatio[kMaxParentChildLinks];
+  double fParentConnectionPointEigenValueRatio_reverse[kMaxParentChildLinks];
+  double fParentConnectionPointOpeningAngle[kMaxParentChildLinks];
+  double fParentConnectionPointOpeningAngle_reverse[kMaxParentChildLinks];
   double fChargeRatio[kMaxParentChildLinks];
   double fPIDLinkType[kMaxParentChildLinks];
+  double fPIDLinkType_cheat[kMaxParentChildLinks];
   double fOpeningAngle[kMaxParentChildLinks];
   double fTrackShowerLinkType[kMaxParentChildLinks];
   ////////////////////////////////////////
@@ -633,12 +653,14 @@ void FDSelection::CCNuSelection::beginJob()
     fTree->Branch("RecoPFPRecoGeneration", fRecoPFPRecoGeneration, "RecoPFPRecoGeneration[NRecoPFPs]/I");
     fTree->Branch("RecoPFPRecoParentSelf", fRecoPFPRecoParentSelf, "RecoPFPRecoParentSelf[NRecoPFPs]/I");
     fTree->Branch("RecoPFPRecoParentPDG", fRecoPFPRecoParentPDG, "RecoPFPRecoParentPDG[NRecoPFPs]/I");
+    fTree->Branch("RecoPFPRecoParentTrackID", fRecoPFPRecoParentTrackID, "RecoPFPRecoParentTrackID[NRecoPFPs]/I");
     fTree->Branch("RecoPFPTrackShowerScore", fRecoPFPTrackShowerScore, "RecoPFPTrackShowerScore[NRecoPFPs]/D");
     fTree->Branch("RecoPFPTrackShowerPDG", fRecoPFPTrackShowerPDG, "RecoPFPTrackShowerPDG[NRecoPFPs]/I");
     fTree->Branch("RecoPFPSpacepointX", &fRecoPFPSpacepointX);
     fTree->Branch("RecoPFPSpacepointY", &fRecoPFPSpacepointY);
     fTree->Branch("RecoPFPSpacepointZ", &fRecoPFPSpacepointZ);
     fTree->Branch("RecoPFPRecoNHits", fRecoPFPRecoNHits,"RecoPFPRecoNHits[NRecoPFPs]/I");
+    fTree->Branch("RecoPFPRecoNSpacepoints", fRecoPFPRecoNSpacepoints,"RecoPFPRecoNSpacepoints[NRecoPFPs]/I");
     fTree->Branch("RecoPFPShowerFitSuccess", fRecoPFPShowerFitSuccess, "RecoPFPShowerFitSuccess[NRecoPFPs]/I");
     fTree->Branch("RecoPFPTrackFitSuccess", fRecoPFPTrackFitSuccess, "RecoPFPTrackFitSuccess[NRecoPFPs]/I");
     fTree->Branch("RecoPFPRecoCompleteness", fRecoPFPRecoCompleteness,"RecoPFPRecoCompleteness[NRecoPFPs]/D");
@@ -778,6 +800,7 @@ void FDSelection::CCNuSelection::beginJob()
     fTree->Branch("NParentChildLinks", &fNParentChildLinks);
     // Truth
     fTree->Branch("TrueParentChildLink", &fTrueParentChildLink, "TrueParentChildLink[NParentChildLinks]/O");
+    fTree->Branch("IsHigherTierTrainingLink", &fIsHigherTierTrainingLink, "IsHigherTierTrainingLink[NParentChildLinks]/O");
     // Parent information
     fTree->Branch("ParentTrackScore", &fParentTrackScore, "ParentTrackScore[NParentChildLinks]/D");
     fTree->Branch("ParentNuVertexSeparation", &fParentNuVertexSeparation, "ParentNuVertexSeparation[NParentChildLinks]/D");
@@ -787,15 +810,31 @@ void FDSelection::CCNuSelection::beginJob()
     fTree->Branch("ParentEndRegionNParticles", &fParentEndRegionNParticles, "ParentEndRegionNParticles[NParentChildLinks]/D");
     fTree->Branch("ParentEndRegionRToWall", &fParentEndRegionRToWall, "ParentEndRegionRToWall[NParentChildLinks]/D");
     // Edge information
-    fTree->Branch("ParentPFPIndex", &fParentPFPIndex, "ParentPFPIndex[NParentChildLinks]/D");
-    fTree->Branch("ChildPFPIndex", &fChildPFPIndex, "ChildPFPIndex[NParentChildLinks]/D");
+    fTree->Branch("ParentPFPIndex", &fParentPFPIndex, "ParentPFPIndex[NParentChildLinks]/I");
+    fTree->Branch("ChildPFPIndex", &fChildPFPIndex, "ChildPFPIndex[NParentChildLinks]/I");
     fTree->Branch("VertexSeparation", &fVertexSeparation, "VertexSeparation[NParentChildLinks]/D");
-    fTree->Branch("SeparationU", &fSeparationU, "SeparationU[NParentChildLinks]/D");
-    fTree->Branch("SeparationV", &fSeparationV, "SeparationV[NParentChildLinks]/D");
-    fTree->Branch("SeparationW", &fSeparationW, "SeparationW[NParentChildLinks]/D");
     fTree->Branch("Separation3D", &fSeparation3D, "Separation3D[NParentChildLinks]/D");
+    fTree->Branch("ChildDCA", &fChildDCA, "ChildDCA[NParentChildLinks]/D");
+    fTree->Branch("ChildDCA_reverse", &fChildDCA_reverse, "ChildDCA_reverse[NParentChildLinks]/D");
+    fTree->Branch("ChildConnectionLRatio", &fChildConnectionLRatio, "ChildConnectionLRatio[NParentChildLinks]/D");
+    fTree->Branch("ChildConnectionLRatio_reverse", &fChildConnectionLRatio_reverse, "ChildConnectionLRatio_reverse[NParentChildLinks]/D");
+    fTree->Branch("LUnderOvershoot", &fLUnderOvershoot, "LUnderOvershoot[NParentChildLinks]/D");
+    fTree->Branch("LUnderOvershoot_reverse", &fLUnderOvershoot_reverse, "LUnderOvershoot_reverse[NParentChildLinks]/D");
+    fTree->Branch("DoesChildConnect", &fDoesChildConnect, "DoesChildConnect[NParentChildLinks]/O");
+    fTree->Branch("DoesChildConnect_reverse", &fDoesChildConnect_reverse, "DoesChildConnect_reverse[NParentChildLinks]/O");
+    fTree->Branch("ParentConnectionPointNUpstreamHits", &fParentConnectionPointNUpstreamHits, "ParentConnectionPointNUpstreamHits[NParentChildLinks]/D");
+    fTree->Branch("ParentConnectionPointNDownstreamHits", &fParentConnectionPointNDownstreamHits, "ParentConnectionPointNDownstreamHits[NParentChildLinks]/D");
+    fTree->Branch("ParentConnectionPointNHitRatio", &fParentConnectionPointNHitRatio, "ParentConnectionPointNHitRatio[NParentChildLinks]/D");
+    fTree->Branch("ParentConnectionPointEigenValueRatio", &fParentConnectionPointEigenValueRatio, "ParentConnectionPointEigenValueRatio[NParentChildLinks]/D");
+    fTree->Branch("ParentConnectionPointOpeningAngle", &fParentConnectionPointOpeningAngle, "ParentConnectionPointOpeningAngle[NParentChildLinks]/D");
+    fTree->Branch("ParentConnectionPointNUpstreamHits_reverse", &fParentConnectionPointNUpstreamHits_reverse, "ParentConnectionPointNUpstreamHits_reverse[NParentChildLinks]/D");
+    fTree->Branch("ParentConnectionPointNDownstreamHits_reverse", &fParentConnectionPointNDownstreamHits_reverse, "ParentConnectionPointNDownstreamHits_reverse[NParentChildLinks]/D");
+    fTree->Branch("ParentConnectionPointNHitRatio_reverse", &fParentConnectionPointNHitRatio_reverse, "ParentConnectionPointNHitRatio_reverse[NParentChildLinks]/D");
+    fTree->Branch("ParentConnectionPointEigenValueRatio_reverse", &fParentConnectionPointEigenValueRatio_reverse, "ParentConnectionPointEigenValueRatio_reverse[NParentChildLinks]/D");
+    fTree->Branch("ParentConnectionPointOpeningAngle_reverse", &fParentConnectionPointOpeningAngle_reverse, "ParentConnectionPointOpeningAngle_reverse[NParentChildLinks]/D");
     fTree->Branch("ChargeRatio", &fChargeRatio, "ChargeRatio[NParentChildLinks]/D");
     fTree->Branch("PIDLinkType", &fPIDLinkType, "PIDLinkType[NParentChildLinks]/D");
+    fTree->Branch("PIDLinkType_cheat", &fPIDLinkType_cheat, "PIDLinkType_cheat[NParentChildLinks]/D");
     fTree->Branch("OpeningAngle", &fOpeningAngle, "OpeningAngle[NParentChildLinks]/D");
     fTree->Branch("TrackShowerLinkType", &fTrackShowerLinkType, "TrackShowerLinkType[NParentChildLinks]/D");
 }
@@ -971,9 +1010,11 @@ void FDSelection::CCNuSelection::Reset()
         fRecoPFPRecoGeneration[i] = kDefInt;
         fRecoPFPRecoParentSelf[i] = kDefInt;
         fRecoPFPRecoParentPDG[i] = kDefInt;
+        fRecoPFPRecoParentTrackID[i] = kDefInt;
         fRecoPFPTrackShowerScore[i] = kDefDoub;
         fRecoPFPTrackShowerPDG[i] = kDefInt;
         fRecoPFPRecoNHits[i] = kDefInt;
+        fRecoPFPRecoNSpacepoints[i] = kDefInt;
         fRecoPFPSpacepointX.clear();
         fRecoPFPSpacepointY.clear();
         fRecoPFPSpacepointZ.clear();
@@ -1117,6 +1158,7 @@ void FDSelection::CCNuSelection::Reset()
     {
         // Truth
         fTrueParentChildLink[i] = false;
+        fIsHigherTierTrainingLink[i] = false;
         // Parent information
         fParentTrackScore[i] = kDefDoub;
         fParentNuVertexSeparation[i] = kDefDoub;
@@ -1126,15 +1168,31 @@ void FDSelection::CCNuSelection::Reset()
         fParentEndRegionNParticles[i] = kDefDoub;
         fParentEndRegionRToWall[i] = kDefDoub;
         // Edge information
-        fParentPFPIndex[i] = kDefDoub;
-        fChildPFPIndex[i] = kDefDoub;
+        fParentPFPIndex[i] = kDefInt;
+        fChildPFPIndex[i] = kDefInt;
         fVertexSeparation[i] = kDefDoub;
-        fSeparationU[i] = kDefDoub;
-        fSeparationV[i] = kDefDoub;
-        fSeparationW[i] = kDefDoub;
+        fChildDCA[i] = kDefDoub;
+        fChildDCA_reverse[i] = kDefDoub;
+        fChildConnectionLRatio[i] = kDefDoub;
+        fChildConnectionLRatio_reverse[i] = kDefDoub;
+        fLUnderOvershoot[i] = kDefDoub;
+        fLUnderOvershoot_reverse[i] = kDefDoub;
+        fDoesChildConnect[i] = false;
+        fDoesChildConnect_reverse[i] = false;
+	    fParentConnectionPointNUpstreamHits[i] = kDefDoub;
+        fParentConnectionPointNUpstreamHits_reverse[i] = kDefDoub;
+        fParentConnectionPointNDownstreamHits[i] = kDefDoub;
+        fParentConnectionPointNDownstreamHits_reverse[i] = kDefDoub;
+        fParentConnectionPointNHitRatio[i] = kDefDoub;
+        fParentConnectionPointNHitRatio_reverse[i] = kDefDoub;
+        fParentConnectionPointEigenValueRatio[i] = kDefDoub;
+        fParentConnectionPointEigenValueRatio_reverse[i] = kDefDoub;
+        fParentConnectionPointOpeningAngle[i] = kDefDoub;
+        fParentConnectionPointOpeningAngle_reverse[i] = kDefDoub;
         fSeparation3D[i] = kDefDoub;
         fChargeRatio[i] = kDefDoub;
         fPIDLinkType[i] = kDefDoub;
+        fPIDLinkType_cheat[i] = kDefDoub;
         fOpeningAngle[i] = kDefDoub;
         fTrackShowerLinkType[i] = kDefDoub;
     }
@@ -1488,12 +1546,14 @@ void FDSelection::CCNuSelection::FillPFParticleInfo(art::Event const & evt)
         const std::vector<art::Ptr<recob::Hit>> pfpHits = dune_ana::DUNEAnaPFParticleUtils::GetHits(pfp, evt, fRecoModuleLabel);
         fRecoPFPRecoNHits[pfpIndex] = pfpHits.size();
 
+        const std::vector<art::Ptr<recob::SpacePoint>> &spacepoints = dune_ana::DUNEAnaPFParticleUtils::GetSpacePoints(pfp, evt, fRecoModuleLabel);
+        fRecoPFPRecoNSpacepoints[pfpIndex] = spacepoints.size();
+
+        std::cout << "fVisualisationMode: " << fVisualisationMode << std::endl;
 
         // If visualise then drop in spacepoint information
         if (fVisualisationMode)
         {
-            const std::vector<art::Ptr<recob::SpacePoint>> &spacepoints = dune_ana::DUNEAnaPFParticleUtils::GetSpacePoints(pfp, evt, fRecoModuleLabel);
-
             std::vector<double> spacepointX, spacepointY, spacepointZ;
 
             for (const art::Ptr<recob::SpacePoint> &spacepoint : spacepoints)
@@ -1502,6 +1562,10 @@ void FDSelection::CCNuSelection::FillPFParticleInfo(art::Event const & evt)
                 spacepointY.push_back(spacepoint->XYZ()[1]);
                 spacepointZ.push_back(spacepoint->XYZ()[2]);
             }
+
+            std::cout << "spacepointXs: " << spacepointX.size() << std::endl;
+            std::cout << "spacepointYs: " << spacepointY.size() << std::endl;
+            std::cout << "spacepointZs: " << spacepointZ.size() << std::endl;
 
             fRecoPFPSpacepointX.push_back(spacepointX);
             fRecoPFPSpacepointY.push_back(spacepointY);
@@ -1641,7 +1705,7 @@ void FDSelection::CCNuSelection::FillHierarchyInfo(art::Event const & evt)
         if (pfpIndex == kMaxPFParticles)
             break;
 
-        SetRecoGenerationInfo(evt, pfp, fRecoPFPRecoGeneration[pfpIndex], fRecoPFPRecoParentSelf[pfpIndex], fRecoPFPRecoParentPDG[pfpIndex]);
+        SetRecoGenerationInfo(evt, pfp, fRecoPFPRecoGeneration[pfpIndex], fRecoPFPRecoParentSelf[pfpIndex], fRecoPFPRecoParentPDG[pfpIndex], fRecoPFPRecoParentTrackID[pfpIndex]);
         SetTrueGenerationInfo(evt, pfpIndex, false, fRecoPFPTrueGeneration[pfpIndex], fRecoPFPTrueParentTrackID[pfpIndex], fRecoPFPTrueParentPDG[pfpIndex]);
         SetTrueGenerationInfo(evt, pfpIndex, true, fRecoPFPTrueVisibleGeneration[pfpIndex], fRecoPFPTrueVisibleParentTrackID[pfpIndex], fRecoPFPTrueVisibleParentPDG[pfpIndex]);
     }
@@ -1650,7 +1714,7 @@ void FDSelection::CCNuSelection::FillHierarchyInfo(art::Event const & evt)
 //////////////////////////////////////////////////////////////////////////////////
 
 void FDSelection::CCNuSelection::SetRecoGenerationInfo(art::Event const & evt, const art::Ptr<recob::PFParticle> &pfp, 
-    int &recoGeneration, int &recoParentSelf, int &recoParentPDG)
+    int &recoGeneration, int &recoParentSelf, int &recoParentPDG, int &recoParentTrackID)
 {
     recoGeneration = lar_pandora::LArPandoraHelper::GetGeneration(fPFPMap, pfp);
     const int parentID = pfp->Parent();
@@ -1662,8 +1726,19 @@ void FDSelection::CCNuSelection::SetRecoGenerationInfo(art::Event const & evt, c
         return;
     }
 
-    recoParentSelf = fPFPMap.at(parentID)->Self();
-    recoParentPDG = kDefInt; // for now.. else I'll have to implement a matching map...
+    const art::Ptr<recob::PFParticle> &parentPFP = fPFPMap.at(parentID);
+
+    recoParentSelf = parentPFP->Self();
+
+    //// numpy arrays are great aren't they
+    for (int i = 0; i < fNRecoPFPs; i++)
+    {
+        if (fRecoPFPSelf[i] == recoParentSelf)
+        {
+            recoParentPDG = fRecoPFPTruePDG[i];
+            recoParentTrackID = fRecoPFPTrueTrackID[i];
+        }
+    }
 }
 
 //////////////////////////////////////////////////////////////////////////////////
@@ -1937,9 +2012,7 @@ void FDSelection::CCNuSelection::FillParentChildLinkInfo(art::Event const & evt)
             break;
 
         // Want to only consider particles with a 3D representation
-        const std::vector<art::Ptr<recob::SpacePoint>> parentSpacepoints = dune_ana::DUNEAnaPFParticleUtils::GetSpacePoints(parentPFP, evt, fRecoModuleLabel);
-
-        if (parentSpacepoints.empty())
+        if (fRecoPFPRecoNSpacepoints[parentPFPIndex] == 0)
             continue;
         
         // Loop over all particles as children
@@ -1961,14 +2034,8 @@ void FDSelection::CCNuSelection::FillParentChildLinkInfo(art::Event const & evt)
             if (parentPFP == childPFP)
                 continue;
 
-            // For higher tier training - skip child primaries
-            if (fRecoPFPTrueVisibleGeneration[childPFPIndex] == 2)
-                continue;
-
             // Want to only consider particles with a 3D representation
-            const std::vector<art::Ptr<recob::SpacePoint>> childSpacepoints = dune_ana::DUNEAnaPFParticleUtils::GetSpacePoints(childPFP, evt, fRecoModuleLabel);
-
-            if (childSpacepoints.empty())
+            if (fRecoPFPRecoNSpacepoints[childPFPIndex] == 0)
                 continue;
         
             //std::cout << "----------------------------" << std::endl;
@@ -1997,7 +2064,11 @@ void FDSelection::CCNuSelection::FillParentChildLinkInfo(art::Event const & evt)
 void FDSelection::CCNuSelection::FillTrueParentChildLinkInfo(const int linkIndex, const int parentPFPIndex, 
     const int childPFPIndex)
 {
-    if (fRecoPFPTrueTrackID[parentPFPIndex] < 0) // no reco match for parent
+   // Do we want to train on this link?
+    fIsHigherTierTrainingLink[linkIndex] = FDSelection::CCNuSelection::IsHigherTierTrainingLink(linkIndex, parentPFPIndex, childPFPIndex);
+
+    // Is it a true link?
+    if ((fRecoPFPTrueTrackID[childPFPIndex] < 0) || (fRecoPFPTrueTrackID[parentPFPIndex] < 0)) // no reco match for particles
     {
         fTrueParentChildLink[linkIndex] = false;
     }
@@ -2021,6 +2092,30 @@ void FDSelection::CCNuSelection::FillTrueParentChildLinkInfo(const int linkIndex
 
 //////////////////////////////////////////////////////////////////////////////////
 
+bool FDSelection::CCNuSelection::IsHigherTierTrainingLink(const int linkIndex, const int parentPFPIndex, 
+    const int childPFPIndex)
+{
+    // 1. Does it have 3D hits?
+    if ((fRecoPFPRecoNSpacepoints[parentPFPIndex] == 0) || (fRecoPFPRecoNSpacepoints[childPFPIndex] == 0))
+        return false;
+
+    // 2. Does it have a trackID match?
+    if ((fRecoPFPTrueTrackID[parentPFPIndex] < 0) || (fRecoPFPTrueTrackID[childPFPIndex] < 0))
+        return false;
+
+    // 3. Do we know the parent?
+    if ((fRecoPFPTrueVisibleParentTrackID[parentPFPIndex] < 0) || (fRecoPFPTrueVisibleParentTrackID[childPFPIndex] < 0))
+        return false;
+
+    // 4. Is the child a primary (child of the nu)?
+    if (fRecoPFPTrueVisibleGeneration[childPFPIndex] == 2)
+        return false;
+
+    return true;
+}
+
+//////////////////////////////////////////////////////////////////////////////////
+
 void FDSelection::CCNuSelection::FillRecoParentChildLinkInfo(art::Event const & evt, const art::Ptr<recob::PFParticle> childPFP, 
     art::Ptr<recob::PFParticle> parentPFP, const int childIndex, const int parentIndex, const int linkIndex)
 { 
@@ -2034,10 +2129,33 @@ void FDSelection::CCNuSelection::FillRecoParentChildLinkInfo(art::Event const & 
     fParentEndRegionRToWall[linkIndex] = HierarchyUtils::GetEndRegionRToWall(evt, parentPFP, fRecoModuleLabel, fTrackModuleLabel);
 
     // Edge information
+    std::map<std::string, double> connectionVars;
+    HierarchyUtils::GetLinkConnectionInfo(evt, parentPFP, childPFP, fRecoModuleLabel, fTrackModuleLabel, connectionVars);
+
     fVertexSeparation[linkIndex] = HierarchyUtils::GetVertexSeparation(evt, parentPFP, childPFP, fRecoModuleLabel);
     fSeparation3D[linkIndex] = HierarchyUtils::GetSeparation3D(evt, parentPFP, childPFP, fRecoModuleLabel);
+    fChildDCA[linkIndex] = connectionVars["ChildDCA"];
+    //fChildDCA_reverse[linkIndex] = HierarchyUtils::GetChildDCA(evt, parentPFP, childPFP, fRecoModuleLabel, fTrackModuleLabel, true);
+    fChildConnectionLRatio[linkIndex] = connectionVars["ChildConnectionLRatio"];
+    //fChildConnectionLRatio_reverse[linconnectionVars["ChildDCA"]kIndex] = HierarchyUtils::GetLRatio(evt, parentPFP, childPFP, fRecoModuleLabel, fTrackModuleLabel, true);
+    fLUnderOvershoot[linkIndex] = connectionVars["UnderOvershootDCA"];
+    //fLUnderOvershoot_reverse[linkIndex] = HierarchyUtils::GetUnderOvershootL(evt, parentPFP, childPFP, fRecoModuleLabel, fTrackModuleLabel, true); 
+    fDoesChildConnect[linkIndex] = connectionVars["DoesChildConnect"];
+    //fDoesChildConnect_reverse[linkIndex] = fLRatio_reverse[linkIndex] > 0.0;
+    fParentConnectionPointNUpstreamHits[linkIndex] = connectionVars["ParentConnectionNUpstreamHits"];
+    //fParentConnectionPointNUpstreamHits_reverse[linkIndex] = connectionVars_reverse["NUpstreamHits"];
+    fParentConnectionPointNDownstreamHits[linkIndex] = connectionVars["ParentConnectionNDownstreamHits"];
+    //fParentConnectionPointNDownstreamHits_reverse[linkIndex] = connectionVars_reverse["NDownstreamHits"];
+    fParentConnectionPointNHitRatio[linkIndex] = connectionVars["ParentConnectionNHitRatio"];
+    //fParentConnectionPointNHitRatio_reverse[linkIndex] = connectionVars_reverse["NHitRatio"];
+    fParentConnectionPointEigenValueRatio[linkIndex] = connectionVars["ParentConnectionEigenValueRatio"];
+    //fParentConnectionPointEigenValueRatio_reverse[linkIndex] = connectionVars_reverse["EigenValueRatio"];
+    fParentConnectionPointOpeningAngle[linkIndex] = connectionVars["ParentConnectionOpeningAngle"];
+    //fParentConnectionPointOpeningAngle_reverse[linkIndex] = connectionVars_reverse["OpeningAngle"];
+
     fChargeRatio[linkIndex] = HierarchyUtils::GetChargeRatio(evt, parentPFP, childPFP, fRecoModuleLabel); 
-    fPIDLinkType[linkIndex] = HierarchyUtils::GetPIDLinkType(fRecoPFPTruePDG[parentIndex], fRecoPFPTruePDG[childIndex]); // ISOBEL - THIS IS CHEATED!
+    fPIDLinkType[linkIndex] = HierarchyUtils::GetPIDLinkTypeWithIvysaurus(fRecoPFPIvysaurusParticleType[parentIndex], fRecoPFPIvysaurusParticleType[childIndex]);
+    fPIDLinkType_cheat[linkIndex] = HierarchyUtils::GetPIDLinkTypeWithPDG(fRecoPFPTruePDG[parentIndex], fRecoPFPTruePDG[childIndex]);
     fOpeningAngle[linkIndex] = HierarchyUtils::GetOpeningAngle(evt, parentPFP, childPFP, fRecoModuleLabel);
     fTrackShowerLinkType[linkIndex] =  HierarchyUtils::GetTrackShowerLinkType(evt, parentPFP, childPFP, fRecoModuleLabel);
 
