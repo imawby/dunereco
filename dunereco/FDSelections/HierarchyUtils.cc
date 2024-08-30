@@ -264,20 +264,28 @@ double GetSeparation3D(art::Event const & evt, const art::Ptr<recob::PFParticle>
 void GetLinkConnectionInfo(art::Event const & evt, const art::Ptr<recob::PFParticle> parentPFP, const art::Ptr<recob::PFParticle> childPFP, 
     const std::string recoModuleLabel, const std::string trackModuleLabel, std::map<std::string, double> &connectionVars)
 {
+    connectionVars["UnderOvershootDCA"] = (-1.0) * DEFAULT_DOUBLE; // needs to be positive for below function to work
+    connectionVars["UnderOvershootL"] = (-1.0) * DEFAULT_DOUBLE; // needs to be positive for below function to work
     connectionVars["DoesChildConnect"] = false;
-    connectionVars["UnderOvershootDCA"] = DEFAULT_DOUBLE;
     connectionVars["ChildConnectionX"] = DEFAULT_DOUBLE;
     connectionVars["ChildConnectionY"] = DEFAULT_DOUBLE;
     connectionVars["ChildConnectionZ"] = DEFAULT_DOUBLE;
     connectionVars["ChildConnectionDX"] = DEFAULT_DOUBLE;
     connectionVars["ChildConnectionDY"] = DEFAULT_DOUBLE;
     connectionVars["ChildConnectionDZ"] = DEFAULT_DOUBLE;
-    connectionVars["ChildDCA"] = DEFAULT_DOUBLE;
     connectionVars["ChildConnectionDCA"] = DEFAULT_DOUBLE;
-    connectionVars["TrackLength"] = DEFAULT_DOUBLE;
+    connectionVars["ChildConnectionExtrapDistance"] = DEFAULT_DOUBLE;
     connectionVars["ChildConnectionL"] = DEFAULT_DOUBLE;
+    connectionVars["TrackLength"] = DEFAULT_DOUBLE;
     connectionVars["ChildConnectionLRatio"] = DEFAULT_DOUBLE;
 
+    // First work out the parent and child vertices
+
+
+
+
+
+    
     TVector3 childVertex = TVector3(0.0, 0.0, 0.0);
 
     // Get child direction
@@ -311,25 +319,34 @@ void GetLinkConnectionInfo(art::Event const & evt, const art::Ptr<recob::PFParti
 
     // Now loop through trajectory points - we can work out several things here...
     double cumulativeL = 0.0;
+    double minDCA = std::numeric_limits<double>::max();
 
     // Loop through trajectory points
     for (int i = 0; i < (nTrajPoints - 1); ++i)
     {
+        const bool arePointsValid = (parentTrack->HasValidPoint(i)) && (parentTrack->HasValidPoint(i+1));
+
+        if (!arePointsValid)
+            continue;
+
         const TVector3 firstPoint = TVector3(parentTrack->TrajectoryPoint(i).position.X(), parentTrack->TrajectoryPoint(i).position.Y(), parentTrack->TrajectoryPoint(i).position.Z());
         const TVector3 secondPoint = TVector3(parentTrack->TrajectoryPoint(i+1).position.X(), parentTrack->TrajectoryPoint(i+1).position.Y(), parentTrack->TrajectoryPoint(i+1).position.Z());
         const TVector3 midPoint = (secondPoint + firstPoint) * 0.5;
 
         // Extrapolate the child to the parent
-        const TVector3 parentTrackEnd = TVector3(parentTrack->End().X(), parentTrack->End().Y(), parentTrack->End().Z());
-        const double extrapFactor((childVertex - midPoint).Dot(childDirection));
+        const double extrapFactor((midPoint - childVertex).Dot(childDirection));
         const TVector3 extrapPoint = childVertex + (extrapFactor * childDirection);
 
         // Work out DCA
-        const float thisDCA = (midPoint - extrapPoint).Mag();
+         const float thisDCA = (midPoint - extrapPoint).Mag();
 
-        if (thisDCA < std::fabs(connectionVars["ChildDCA"]))
+        if (thisDCA < minDCA)
         {
-            connectionVars["ChildDCA"] = thisDCA;
+            // Extrap point should move closer to parent track
+            if (extrapFactor > 0.0)
+                continue;
+
+            minDCA = thisDCA;
 
             // Does this connect - be very loose?
             const float buffer = 5.0;
@@ -341,6 +358,7 @@ void GetLinkConnectionInfo(art::Event const & evt, const art::Ptr<recob::PFParti
                 connectionVars["ChildConnectionX"] = midPoint.X();
                 connectionVars["ChildConnectionY"] = midPoint.Y();
                 connectionVars["ChildConnectionZ"] = midPoint.Z();
+                connectionVars["ChildConnectionExtrapDistance"] = extrapFactor;
 
                 const TVector3 midPointDir = (secondPoint - firstPoint).Unit();
 
@@ -354,7 +372,6 @@ void GetLinkConnectionInfo(art::Event const & evt, const art::Ptr<recob::PFParti
         cumulativeL += (secondPoint - firstPoint).Mag();
     }
 
-
     connectionVars["TrackLength"] = cumulativeL;
 
     if (connectionVars["DoesChildConnect"])
@@ -367,12 +384,31 @@ void GetLinkConnectionInfo(art::Event const & evt, const art::Ptr<recob::PFParti
         const TVector3 parentTrackEnd = TVector3(parentTrack->End().X(), parentTrack->End().Y(), parentTrack->End().Z());
         const double gamma_start((childVertex - parentTrackStart).Dot(childDirection));
         const double gamma_end((childVertex - parentTrackEnd).Dot(childDirection));
-        const TVector3 extrap_start = childVertex + (gamma_start * childDirection);
-        const TVector3 extrap_end = childVertex + (gamma_end * childDirection);
-        const float dca_start = (extrap_start - parentTrackStart).Mag();
-        const float dca_end = (extrap_end - parentTrackEnd).Mag();
 
-        connectionVars["UnderOvershootDCA"] = std::min(dca_start, dca_end);
+        // Child should be coming out of the track
+        if (gamma_start < 0.0)
+        {
+            const TVector3 extrap_start = childVertex + (gamma_start * childDirection);
+            const double dca_start = (extrap_start - parentTrackStart).Mag();
+            connectionVars["UnderOvershootDCA"] = std::min(dca_start, connectionVars["UnderOvershootDCA"]);
+
+            // Get L on parent track
+            const TVector3 parentTrackStartDirection = TVector3(parentTrack->StartDirection().X(), parentTrack->StartDirection().Y(), parentTrack->StartDirection().Z());
+            const double parentL_start = std::fabs((childVertex - parentTrackStart).Dot(parentTrackStartDirection));
+            connectionVars["UnderOvershootL"] = std::min(parentL_start, connectionVars["UnderOvershootL"]);
+        }
+
+        if (gamma_end < 0.0)
+        {
+            const TVector3 extrap_end = childVertex + (gamma_end * childDirection);
+            const double dca_end = (extrap_end - parentTrackEnd).Mag();
+            connectionVars["UnderOvershootDCA"] = std::min(dca_end, connectionVars["UnderOvershootDCA"]);
+
+            // Get L on parent track
+            const TVector3 parentTrackEndDirection = TVector3(parentTrack->EndDirection().X(), parentTrack->EndDirection().Y(), parentTrack->EndDirection().Z());
+            const double parentL_end = std::fabs((childVertex - parentTrackEnd).Dot(parentTrackEndDirection));
+            connectionVars["UnderOvershootL"] = std::min(parentL_end, connectionVars["UnderOvershootL"]);
+        }
     }
 
     // I know the 10cm is hard coded... shhhh...
@@ -400,6 +436,7 @@ bool IsPandoraApprovedTrack(art::Event const & evt, const art::Ptr<recob::PFPart
 
 bool IsInBoundingBox(const TVector3 &boundary1, const TVector3 &boundary2, const TVector3 &testPoint, const float buffer)
 {
+    /*
     const double minX = std::min(boundary1.X(), boundary2.X()) - buffer;
     const double maxX = std::max(boundary1.X(), boundary2.X()) + buffer;
     const double minY = std::min(boundary1.Y(), boundary2.Y()) - buffer;
@@ -414,6 +451,21 @@ bool IsInBoundingBox(const TVector3 &boundary1, const TVector3 &boundary2, const
         return false;
 
     if ((testPoint.Z() < minZ) || (testPoint.Z() > maxZ))
+        return false;
+    */
+
+    const TVector3 displacement = boundary2 - boundary1;
+    const double segmentLength = displacement.Mag();
+    const TVector3 unitVector = displacement * (1.0 / segmentLength);
+
+    const double l = unitVector.Dot(testPoint - boundary1);
+
+    if ((l < 0.0) || (l > segmentLength))
+        return false;
+
+    const double t = unitVector.Cross(testPoint - boundary1).Mag();
+
+    if (t > buffer)
         return false;
 
     return true;
@@ -684,7 +736,7 @@ bool GetParticleDirection(const art::Event &evt, const art::Ptr<recob::PFParticl
         {
             const TVector3 spacepointPos = TVector3(spacepoint->position().X(), spacepoint->position().Y(), spacepoint->position().Z());
             const TVector3 displacement = spacepointPos - vertexPos;
-            const float mag = sqrt((displacement.X() * displacement.X()) + (displacement.Y() * displacement.Y()) + (displacement.Z() * displacement.Z()));
+            const float mag = displacement.Mag();
 
             if (mag > searchRegion)
                 continue;
@@ -696,15 +748,12 @@ bool GetParticleDirection(const art::Event &evt, const art::Ptr<recob::PFParticl
                 std::acos(displacement.Y() / mag);
 
             float theta0XZ = (magXZ < std::numeric_limits<float>::epsilon()) ? 0.f : 
-                (std::fabs(std::fabs(displacement.Z() / magXZ) - 1.f) < std::numeric_limits<float>::epsilon()) ? 0.f :
-                std::acos(displacement.Z() / magXZ);
+                (std::fabs(std::fabs(displacement.X() / magXZ) - 1.f) < std::numeric_limits<float>::epsilon()) ? 0.f :
+                std::acos(displacement.X() / magXZ);
 
             // try do signed-ness
             if (displacement.Z() < 0.f)
-                theta0YZ += M_PI;
-
-            if (displacement.X() < 0.f)
-                theta0XZ += M_PI;
+                theta0XZ = (2.0 * M_PI) - theta0XZ;
 
             const std::vector<art::Ptr<recob::Hit>> assocHits = dune_ana::DUNEAnaSpacePointUtils::GetHits(spacepoint, evt, recoModuleLabel);
 
@@ -733,9 +782,9 @@ bool GetParticleDirection(const art::Event &evt, const art::Ptr<recob::PFParticl
         const float bestTheta0YZ = angleMin + ((static_cast<float>(bestTheta0YZBin) + 0.5f) * binWidth);
         const float bestTheta0XZ = angleMin + ((static_cast<float>(bestTheta0XZBin) + 0.5f) * binWidth);
 
-        pfpDirection = TVector3(std::fabs(std::sin(bestTheta0YZ) * std::sin(bestTheta0XZ)), std::fabs(std::cos(bestTheta0YZ)), 
-            std::fabs(std::sin(bestTheta0YZ) * std::cos(bestTheta0XZ)));
+        pfpDirection = TVector3(std::sin(bestTheta0YZ) * std::cos(bestTheta0XZ), std::cos(bestTheta0YZ), std::sin(bestTheta0YZ) * std::sin(bestTheta0XZ));
 
+        /*
         if (bestTheta0XZ > M_PI)
             pfpDirection.SetX(pfpDirection.X() * -1.f);
 
@@ -744,6 +793,7 @@ bool GetParticleDirection(const art::Event &evt, const art::Ptr<recob::PFParticl
 
         if ((bestTheta0YZ > (M_PI / 2.f)) && (bestTheta0YZ < (M_PI * 3.f / 2.f)))
             pfpDirection.SetY(pfpDirection.Y() * -1.f);
+        */
     }
     catch (...) { return false; }
 
