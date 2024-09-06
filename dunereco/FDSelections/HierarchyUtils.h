@@ -36,42 +36,54 @@ namespace HierarchyUtils
  double DEFAULT_DOUBLE = -9999.0;
  int DEFAULT_INT = -999;
 
- // PFP-level
- double GetTrackScore(art::Event const & evt, const art::Ptr<recob::PFParticle> pfp, const std::string recoModuleLabel);
+ void GetLinkInfo(art::Event const & evt, const art::Ptr<recob::PFParticle> parentPFP, const art::Ptr<recob::PFParticle> childPFP, 
+     const TVector3 &trueParentEndpoint, const TVector3 &trueChildStartpoint,  
+     const std::string recoModuleLabel, const std::string trackModuleLabel, std::map<std::string, double> &linkVars);
 
- double GetNuVertexSeparation(art::Event const & evt, const art::Ptr<recob::PFParticle> pfp, 
-     const std::string recoModuleLabel);
+ bool CheatGetParentEndpointAndDirection(art::Event const & evt, const art::Ptr<recob::PFParticle> parentPFP, const TVector3 &trueParentEndpoint,
+     const std::string recoModuleLabel, const std::string trackModuleLabel, std::map<std::string, double> &linkVars);
+
+ bool CheatGetChildStartpointAndDirection(art::Event const & evt, const art::Ptr<recob::PFParticle> childPFP, const TVector3 &trueChildStartpoint,
+     const std::string recoModuleLabel, const std::string trackModuleLabel, std::map<std::string, double> &linkVars);
+
+ double GetNuVertexSeparation(art::Event const & evt, const TVector3 &particleVertex, const std::string recoModuleLabel);
 
  double GetBraggVariable();
 
- int GetEndRegionNHits(art::Event const & evt, const art::Ptr<recob::PFParticle> pfp, const std::string trackModuleLabel,  
-     const std::string recoModuleLabel, const double separationThreshold);
+ void GetEndRegionVars(art::Event const & evt, const art::Ptr<recob::PFParticle> parentPFP,  
+     const std::string recoModuleLabel, std::map<std::string, double> &linkVars);
 
- int GetEndRegionNParticles(art::Event const & evt, const art::Ptr<recob::PFParticle> pfp, const std::string trackModuleLabel,  
-     const std::string recoModuleLabel, const double separationThreshold);
+ void GetEndRegionNParticlesAndHits(art::Event const & evt, const art::Ptr<recob::PFParticle> parentPFP, const std::string recoModuleLabel, 
+     const double separationThreshold, std::map<std::string, double> &linkVars);
 
- double GetEndRegionRToWall(art::Event const & evt, const art::Ptr<recob::PFParticle> pfp, const std::string recoModuleLabel, 
-     const std::string trackModuleLabel);
+ void GetEndRegionRToWall(std::map<std::string, double> &linkVars);
 
- // Edge-level
- double GetVertexSeparation(art::Event const & evt, const art::Ptr<recob::PFParticle> parentPFP, const art::Ptr<recob::PFParticle> childPFP, 
-     const std::string recoModuleLabel);
+ void GetConnectionVars(art::Event const & evt, const art::Ptr<recob::PFParticle> parentPFP, const art::Ptr<recob::PFParticle> childPFP, 
+     const std::string recoModuleLabel, const std::string trackModuleLabel, std::map<std::string, double> &linkVars);
 
- double GetSeparation3D(art::Event const & evt, const art::Ptr<recob::PFParticle> parentPFP, const art::Ptr<recob::PFParticle> childPFP, 
-     const std::string recoModuleLabel);
-
- void GetLinkConnectionInfo(art::Event const & evt, const art::Ptr<recob::PFParticle> parentPFP, const art::Ptr<recob::PFParticle> childPFP, 
-     const std::string recoModuleLabel, const std::string trackModuleLabel, std::map<std::string, double> &connectionVars);
+ //bool GetParentChildVerticesAndDirections(art::Event const & evt, const art::Ptr<recob::PFParticle> parentPFP, const art::Ptr<recob::PFParticle> childPFP, 
+ //const std::string recoModuleLabel, const std::string trackModuleLabel, std::map<std::string, double> &linkVars);
 
  bool IsPandoraApprovedTrack(art::Event const & evt, const art::Ptr<recob::PFParticle> pfp, const std::string recoModuleLabel, 
      const std::string trackModuleLabel);
 
- bool IsInBoundingBox(const TVector3 &boundary1, const TVector3 &boundary2, const TVector3 &testPoint, const float buffer);
+ bool ExtrapolateChildToParent(const TVector3 &parentVertex, const TVector3 &childVertex, const TVector3 &childDirection,
+     TVector3 &extrapolationPoint);
+
+ bool DoesConnect(const TVector3 &boundary1, const TVector3 &boundary2, const TVector3 &testPoint, const float buffer);
 
  void GetParentConnectionPointVars(art::Event const & evt, const art::Ptr<recob::PFParticle> parentPFP,
-     const std::string recoModuleLabel, const double searchRegion, std::map<std::string, double> &connectionVars);
+     const std::string recoModuleLabel, const double searchRegion, std::map<std::string, double> &linkVars);    
 
  void RunPCA(const std::vector<art::Ptr<recob::SpacePoint>> &spacepoints, std::vector<double> &eVals, std::vector<TVector3> &eVecs);
+
+ bool GetParticleDirection(const art::Event &evt, const art::Ptr<recob::PFParticle> &pfp, const TVector3 &pfpVertex, const std::string recoModuleLabel, 
+     const float searchRegion, TVector3 &pfpDirection);    
+    
+ double GetTrackScore(art::Event const & evt, const art::Ptr<recob::PFParticle> pfp, const std::string recoModuleLabel);
+
+ double GetSeparation3D(art::Event const & evt, const art::Ptr<recob::PFParticle> parentPFP, const art::Ptr<recob::PFParticle> childPFP, 
+     const std::string recoModuleLabel);
 
  double GetChargeRatio(art::Event const & evt, const art::Ptr<recob::PFParticle> parentPFP, const art::Ptr<recob::PFParticle> childPFP, 
      const std::string recoModuleLabel);
@@ -81,12 +93,6 @@ namespace HierarchyUtils
  int GetPIDLinkTypeWithIvysaurus(const int parentParticleType, const int childParticleType);
 
  int GetPIDLinkTypeWithPDG(const int parentPDG, const int childPDG);
-
- double GetOpeningAngle(art::Event const & evt, const art::Ptr<recob::PFParticle> parentPFP, const art::Ptr<recob::PFParticle> childPFP, 
-    const std::string recoModuleLabel);
-
- bool GetParticleDirection(const art::Event &evt, const art::Ptr<recob::PFParticle> &pfp, const std::string recoModuleLabel, 
-    const float searchRegion, TVector3 &pfpDirection);
 
  int GetTrackShowerLinkType(art::Event const & evt, const art::Ptr<recob::PFParticle> parentPFP, const art::Ptr<recob::PFParticle> childPFP, 
     const std::string recoModuleLabel);

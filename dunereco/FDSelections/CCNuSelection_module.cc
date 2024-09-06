@@ -396,6 +396,24 @@ private:
   // Edge information
   int fParentPFPIndex[kMaxParentChildLinks];
   int fChildPFPIndex[kMaxParentChildLinks];
+  double fChildStartX[kMaxParentChildLinks];
+  double fChildStartY[kMaxParentChildLinks];
+  double fChildStartZ[kMaxParentChildLinks];
+  double fChildStartDX[kMaxParentChildLinks];
+  double fChildStartDY[kMaxParentChildLinks];
+  double fChildStartDZ[kMaxParentChildLinks];
+  double fParentEndX[kMaxParentChildLinks];
+  double fParentEndY[kMaxParentChildLinks];
+  double fParentEndZ[kMaxParentChildLinks];
+  double fParentEndDX[kMaxParentChildLinks];
+  double fParentEndDY[kMaxParentChildLinks];
+  double fParentEndDZ[kMaxParentChildLinks];
+  double fParentStartX[kMaxParentChildLinks];
+  double fParentStartY[kMaxParentChildLinks];
+  double fParentStartZ[kMaxParentChildLinks];
+  double fParentStartDX[kMaxParentChildLinks];
+  double fParentStartDY[kMaxParentChildLinks];
+  double fParentStartDZ[kMaxParentChildLinks];
   double fVertexSeparation[kMaxParentChildLinks];
   double fSeparation3D[kMaxParentChildLinks];
   bool fDoesChildConnect[kMaxParentChildLinks];
@@ -812,6 +830,24 @@ void FDSelection::CCNuSelection::beginJob()
     // Edge information
     fTree->Branch("ParentPFPIndex", &fParentPFPIndex, "ParentPFPIndex[NParentChildLinks]/I");
     fTree->Branch("ChildPFPIndex", &fChildPFPIndex, "ChildPFPIndex[NParentChildLinks]/I");
+    fTree->Branch("ChildStartX", &fChildStartX, "ChildStartX[NParentChildLinks]/D");
+    fTree->Branch("ChildStartY", &fChildStartY, "ChildStartY[NParentChildLinks]/D");
+    fTree->Branch("ChildStartZ", &fChildStartZ, "ChildStartZ[NParentChildLinks]/D");
+    fTree->Branch("ChildStartDX", &fChildStartDX, "ChildStartDX[NParentChildLinks]/D");
+    fTree->Branch("ChildStartDY", &fChildStartDY, "ChildStartDY[NParentChildLinks]/D");
+    fTree->Branch("ChildStartDZ", &fChildStartDZ, "ChildStartDZ[NParentChildLinks]/D");
+    fTree->Branch("ParentEndX", &fParentEndX, "ParentEndX[NParentChildLinks]/D");
+    fTree->Branch("ParentEndY", &fParentEndY, "ParentEndY[NParentChildLinks]/D");
+    fTree->Branch("ParentEndZ", &fParentEndZ, "ParentEndZ[NParentChildLinks]/D");
+    fTree->Branch("ParentEndDX", &fParentEndDX, "ParentEndDX[NParentChildLinks]/D");
+    fTree->Branch("ParentEndDY", &fParentEndDY, "ParentEndDY[NParentChildLinks]/D");
+    fTree->Branch("ParentEndDZ", &fParentEndDZ, "ParentEndDZ[NParentChildLinks]/D");
+    fTree->Branch("ParentStartX", &fParentStartX, "ParentStartX[NParentChildLinks]/D");
+    fTree->Branch("ParentStartY", &fParentStartY, "ParentStartY[NParentChildLinks]/D");
+    fTree->Branch("ParentStartZ", &fParentStartZ, "ParentStartZ[NParentChildLinks]/D");
+    fTree->Branch("ParentStartDX", &fParentStartDX, "ParentStartDX[NParentChildLinks]/D");
+    fTree->Branch("ParentStartDY", &fParentStartDY, "ParentStartDY[NParentChildLinks]/D");
+    fTree->Branch("ParentStartDZ", &fParentStartDZ, "ParentStartDZ[NParentChildLinks]/D");
     fTree->Branch("VertexSeparation", &fVertexSeparation, "VertexSeparation[NParentChildLinks]/D");
     fTree->Branch("Separation3D", &fSeparation3D, "Separation3D[NParentChildLinks]/D");
     fTree->Branch("DoesChildConnect", &fDoesChildConnect, "DoesChildConnect[NParentChildLinks]/O");
@@ -1170,6 +1206,24 @@ void FDSelection::CCNuSelection::Reset()
         // Edge information
         fParentPFPIndex[i] = kDefInt;
         fChildPFPIndex[i] = kDefInt;
+        fChildStartX[i] = kDefDoub;
+        fChildStartY[i] = kDefDoub;
+        fChildStartZ[i] = kDefDoub;
+        fChildStartDX[i] = kDefDoub;
+        fChildStartDY[i] = kDefDoub;
+        fChildStartDZ[i] = kDefDoub;
+        fParentEndX[i] = kDefDoub;
+        fParentEndY[i] = kDefDoub;
+        fParentEndZ[i] = kDefDoub;
+        fParentEndDX[i] = kDefDoub;
+        fParentEndDY[i] = kDefDoub;
+        fParentEndDZ[i] = kDefDoub;
+        fParentStartX[i] = kDefDoub;
+        fParentStartY[i] = kDefDoub;
+        fParentStartZ[i] = kDefDoub;
+        fParentStartDX[i] = kDefDoub;
+        fParentStartDY[i] = kDefDoub;
+        fParentStartDZ[i] = kDefDoub;
         fVertexSeparation[i] = kDefDoub;
         fSeparation3D[i] = kDefDoub;
         fDoesChildConnect[i] = false;
@@ -1610,9 +1664,9 @@ void FDSelection::CCNuSelection::FillPFParticleInfo(art::Event const & evt)
                 fRecoPFPTrueMomX[pfpIndex] = matched_mcparticle->Momentum().X();
                 fRecoPFPTrueMomY[pfpIndex] = matched_mcparticle->Momentum().Y();
                 fRecoPFPTrueMomZ[pfpIndex] = matched_mcparticle->Momentum().Z();
-                fRecoPFPTrueStartX[pfpIndex] = matched_mcparticle->Position(0).X();
-                fRecoPFPTrueStartY[pfpIndex] = matched_mcparticle->Position(0).Y();
-                fRecoPFPTrueStartZ[pfpIndex] = matched_mcparticle->Position(0).Z();
+                fRecoPFPTrueStartX[pfpIndex] = fRecoPFPTruePDG[pfpIndex] == 22 ? matched_mcparticle->EndPosition().X() : matched_mcparticle->Position(0).X();
+                fRecoPFPTrueStartY[pfpIndex] = fRecoPFPTruePDG[pfpIndex] == 22 ? matched_mcparticle->EndPosition().Y() : matched_mcparticle->Position(0).Y();
+                fRecoPFPTrueStartZ[pfpIndex] = fRecoPFPTruePDG[pfpIndex] == 22 ? matched_mcparticle->EndPosition().Z() : matched_mcparticle->Position(0).Z();
                 fRecoPFPTrueEndX[pfpIndex] = matched_mcparticle->EndPosition().X();
                 fRecoPFPTrueEndY[pfpIndex] = matched_mcparticle->EndPosition().Y();
                 fRecoPFPTrueEndZ[pfpIndex] = matched_mcparticle->EndPosition().Z();
@@ -2112,46 +2166,68 @@ bool FDSelection::CCNuSelection::IsHigherTierTrainingLink(const int linkIndex, c
 
 void FDSelection::CCNuSelection::FillRecoParentChildLinkInfo(art::Event const & evt, const art::Ptr<recob::PFParticle> childPFP, 
     art::Ptr<recob::PFParticle> parentPFP, const int childIndex, const int parentIndex, const int linkIndex)
-{ 
-    // Parent information
+{
     fParentTrackScore[linkIndex] = HierarchyUtils::GetTrackScore(evt, parentPFP, fRecoModuleLabel);
-    fParentNuVertexSeparation[linkIndex] = HierarchyUtils::GetNuVertexSeparation(evt, parentPFP, fRecoModuleLabel);
-    fChildNuVertexSeparation[linkIndex] = HierarchyUtils::GetNuVertexSeparation(evt, childPFP, fRecoModuleLabel);
-    fParentBraggVariable[linkIndex] = HierarchyUtils::GetBraggVariable();
-    fParentEndRegionNHits[linkIndex] = HierarchyUtils::GetEndRegionNHits(evt, parentPFP, fTrackModuleLabel,  fRecoModuleLabel, 5.0);
-    fParentEndRegionNParticles[linkIndex] = HierarchyUtils::GetEndRegionNParticles(evt, parentPFP, fTrackModuleLabel,  fRecoModuleLabel, 5.0);
-    fParentEndRegionRToWall[linkIndex] = HierarchyUtils::GetEndRegionRToWall(evt, parentPFP, fRecoModuleLabel, fTrackModuleLabel);
-
-    // Edge information
-    std::map<std::string, double> connectionVars;
-    HierarchyUtils::GetLinkConnectionInfo(evt, parentPFP, childPFP, fRecoModuleLabel, fTrackModuleLabel, connectionVars);
-
-    fVertexSeparation[linkIndex] = HierarchyUtils::GetVertexSeparation(evt, parentPFP, childPFP, fRecoModuleLabel);
-    fSeparation3D[linkIndex] = HierarchyUtils::GetSeparation3D(evt, parentPFP, childPFP, fRecoModuleLabel);
-    fDoesChildConnect[linkIndex] = connectionVars["DoesChildConnect"];
-    fUnderOvershootDCA[linkIndex] = connectionVars["UnderOvershootDCA"];
-    fUnderOvershootL[linkIndex] = connectionVars["UnderOvershootL"];
-    fChildConnectionX[linkIndex] = connectionVars["ChildConnectionX"];
-    fChildConnectionY[linkIndex] = connectionVars["ChildConnectionY"];
-    fChildConnectionZ[linkIndex] = connectionVars["ChildConnectionZ"];
-    fChildConnectionDX[linkIndex] = connectionVars["ChildConnectionDX"];
-    fChildConnectionDY[linkIndex] = connectionVars["ChildConnectionDY"];
-    fChildConnectionDZ[linkIndex] = connectionVars["ChildConnectionDZ"];
-    fChildConnectionDCA[linkIndex] = connectionVars["ChildConnectionDCA"];
-    fChildConnectionExtrapDistance[linkIndex] = connectionVars["ChildConnectionExtrapDistance"];
-    fChildConnectionL[linkIndex] = connectionVars["ChildConnectionL"];
-    fChildConnectionLRatio[linkIndex] = connectionVars["ChildConnectionLRatio"];
-    fParentConnectionPointNUpstreamHits[linkIndex] = connectionVars["ParentConnectionNUpstreamHits"];
-    fParentConnectionPointNDownstreamHits[linkIndex] = connectionVars["ParentConnectionNDownstreamHits"];
-    fParentConnectionPointNHitRatio[linkIndex] = connectionVars["ParentConnectionNHitRatio"];
-    fParentConnectionPointEigenValueRatio[linkIndex] = connectionVars["ParentConnectionEigenValueRatio"];
-    fParentConnectionPointOpeningAngle[linkIndex] = connectionVars["ParentConnectionOpeningAngle"];
-
+    fSeparation3D[linkIndex] = HierarchyUtils::GetSeparation3D(evt, parentPFP, childPFP, fRecoModuleLabel);    
     fChargeRatio[linkIndex] = HierarchyUtils::GetChargeRatio(evt, parentPFP, childPFP, fRecoModuleLabel); 
     fPIDLinkType[linkIndex] = HierarchyUtils::GetPIDLinkTypeWithIvysaurus(fRecoPFPIvysaurusParticleType[parentIndex], fRecoPFPIvysaurusParticleType[childIndex]);
-    fPIDLinkType_cheat[linkIndex] = HierarchyUtils::GetPIDLinkTypeWithPDG(fRecoPFPTruePDG[parentIndex], fRecoPFPTruePDG[childIndex]);
-    fOpeningAngle[linkIndex] = HierarchyUtils::GetOpeningAngle(evt, parentPFP, childPFP, fRecoModuleLabel);
+    fPIDLinkType_cheat[linkIndex] = HierarchyUtils::GetPIDLinkTypeWithPDG(fRecoPFPTruePDG[parentIndex], fRecoPFPTruePDG[childIndex]);    
     fTrackShowerLinkType[linkIndex] =  HierarchyUtils::GetTrackShowerLinkType(evt, parentPFP, childPFP, fRecoModuleLabel);
+    
+    std::map<std::string, double> linkVars;
+    const TVector3 trueParentEndpoint = TVector3(fRecoPFPTrueEndX[parentIndex], fRecoPFPTrueEndY[parentIndex], fRecoPFPTrueEndZ[parentIndex]);
+    const TVector3 trueChildStartpoint = TVector3(fRecoPFPTrueStartX[childIndex], fRecoPFPTrueStartY[childIndex], fRecoPFPTrueStartZ[childIndex]);
+    HierarchyUtils::GetLinkInfo(evt, parentPFP, childPFP, trueParentEndpoint, trueChildStartpoint, fRecoModuleLabel, fTrackModuleLabel, linkVars);
+
+    fChildStartX[linkIndex] = linkVars["ChildStartX"];
+    fChildStartY[linkIndex] = linkVars["ChildStartY"];
+    fChildStartZ[linkIndex] = linkVars["ChildStartZ"];
+    fChildStartDX[linkIndex] = linkVars["ChildStartDX"];
+    fChildStartDY[linkIndex] = linkVars["ChildStartDY"];
+    fChildStartDZ[linkIndex] = linkVars["ChildStartDZ"];
+    fParentEndX[linkIndex] = linkVars["ParentEndX"];
+    fParentEndY[linkIndex] = linkVars["ParentEndY"];
+    fParentEndZ[linkIndex] = linkVars["ParentEndZ"];
+    fParentEndDX[linkIndex] = linkVars["ParentEndDX"];
+    fParentEndDY[linkIndex] = linkVars["ParentEndDY"];
+    fParentEndDZ[linkIndex] = linkVars["ParentEndDZ"];
+    fParentStartX[linkIndex] = linkVars["ParentStartX"];
+    fParentStartY[linkIndex] = linkVars["ParentStartY"];
+    fParentStartZ[linkIndex] = linkVars["ParentStartZ"];
+    fParentStartDX[linkIndex] = linkVars["ParentStartDX"];
+    fParentStartDY[linkIndex] = linkVars["ParentStartDY"];
+    fParentStartDZ[linkIndex] = linkVars["ParentStartDZ"];
+
+    // General vars
+    fParentNuVertexSeparation[linkIndex] = linkVars["ParentNuVertexSeparation"];
+    fChildNuVertexSeparation[linkIndex] = linkVars["ChildNuVertexSeparation"];
+    fParentBraggVariable[linkIndex] = linkVars["ParentBraggVariable"];
+    fOpeningAngle[linkIndex] = linkVars["OpeningAngle"];
+    fVertexSeparation[linkIndex] = linkVars["VertexSeparation"];    
+    // End region vars
+    fParentEndRegionNHits[linkIndex] = linkVars["ParentEndRegionNHits"];
+    fParentEndRegionNParticles[linkIndex] = linkVars["ParentEndRegionNParticles"];
+    fParentEndRegionRToWall[linkIndex] = linkVars["ParentEndRegionRToWall"];
+    // Does/where child connects vars        
+    fUnderOvershootDCA[linkIndex] = linkVars["UnderOvershootDCA"];
+    fUnderOvershootL[linkIndex] = linkVars["UnderOvershootL"];
+    fDoesChildConnect[linkIndex] = linkVars["DoesChildConnect"];
+    fChildConnectionX[linkIndex] = linkVars["ChildConnectionX"];
+    fChildConnectionY[linkIndex] = linkVars["ChildConnectionY"];
+    fChildConnectionZ[linkIndex] = linkVars["ChildConnectionZ"];
+    fChildConnectionDX[linkIndex] = linkVars["ChildConnectionDX"];
+    fChildConnectionDY[linkIndex] = linkVars["ChildConnectionDY"];
+    fChildConnectionDZ[linkIndex] = linkVars["ChildConnectionDZ"];
+    fChildConnectionDCA[linkIndex] = linkVars["ChildConnectionDCA"];
+    fChildConnectionExtrapDistance[linkIndex] = linkVars["ChildConnectionExtrapDistance"];
+    fChildConnectionL[linkIndex] = linkVars["ChildConnectionL"];
+    fChildConnectionLRatio[linkIndex] = linkVars["ChildConnectionLRatio"];
+    // Splitting parent vars
+    fParentConnectionPointNUpstreamHits[linkIndex] = linkVars["ParentConnectionNUpstreamHits"];
+    fParentConnectionPointNDownstreamHits[linkIndex] = linkVars["ParentConnectionNDownstreamHits"];
+    fParentConnectionPointNHitRatio[linkIndex] = linkVars["ParentConnectionNHitRatio"];
+    fParentConnectionPointEigenValueRatio[linkIndex] = linkVars["ParentConnectionEigenValueRatio"];
+    fParentConnectionPointOpeningAngle[linkIndex] = linkVars["ParentConnectionOpeningAngle"];
 
     /////////////////////////////////////////
     /*
