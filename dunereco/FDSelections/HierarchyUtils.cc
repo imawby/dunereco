@@ -531,13 +531,27 @@ void GetParentConnectionPointVars(art::Event const & evt, const art::Ptr<recob::
     linkVars["ParentConnectionNHitRatio"] = linkVars["ParentConnectionNDownstreamHits"] / linkVars["ParentConnectionNUpstreamHits"];
 
     // Now do PCA
+    // Demand a reasonable number of hits
+    if ((upstreamGroup.size() < 3) || (downstreamGroup.size() < 3))
+        return;
+
     std::vector<double> upstreamEigenvalues;
     std::vector<TVector3> upstreamEigenvectors;
     HierarchyUtils::RunPCA(upstreamGroup, upstreamEigenvalues, upstreamEigenvectors);
 
+    // Make sure the PCA fit is sensible
+    for (double upstreamEigenvalue : upstreamEigenvalues)
+        if (std::isnan(upstreamEigenvalue))
+            return;
+
     std::vector<double> downstreamEigenvalues;
     std::vector<TVector3> downstreamEigenvectors;
     HierarchyUtils::RunPCA(downstreamGroup, downstreamEigenvalues, downstreamEigenvectors);
+
+    // Make sure the PCA fit is sensible
+    for (double downstreamEigenvalue : downstreamEigenvalues)
+        if (std::isnan(downstreamEigenvalue))
+            return;
 
     // Get opening angle from first eigenvectors (this is the longitudinal one) - straight would be around 180
     linkVars["ParentConnectionOpeningAngle"] = upstreamEigenvectors.at(0).Angle(downstreamEigenvectors.at(0)) * 180.0 / M_PI;
