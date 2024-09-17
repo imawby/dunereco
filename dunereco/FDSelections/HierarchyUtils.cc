@@ -51,8 +51,10 @@ void GetLinkInfo(art::Event const & evt, const art::Ptr<recob::PFParticle> paren
     linkVars["ChildStartX"] = DEFAULT_DOUBLE; linkVars["ChildStartY"] = DEFAULT_DOUBLE; linkVars["ChildStartZ"] = DEFAULT_DOUBLE;    
     linkVars["ChildStartDX"] = DEFAULT_DOUBLE; linkVars["ChildStartDY"] = DEFAULT_DOUBLE; linkVars["ChildStartDZ"] = DEFAULT_DOUBLE;
     // Does/where child connects vars
-    linkVars["UnderOvershootDCA"] = (-1.0) * DEFAULT_DOUBLE; // needs to be positive for below function to work
-    linkVars["UnderOvershootL"] = (-1.0) * DEFAULT_DOUBLE; // needs to be positive for below function to work
+    linkVars["OvershootStartDCA"] = DEFAULT_DOUBLE;
+    linkVars["OvershootStartL"] = DEFAULT_DOUBLE;
+    linkVars["OvershootEndDCA"] = DEFAULT_DOUBLE;
+    linkVars["OvershootEndL"] = DEFAULT_DOUBLE;
     linkVars["DoesChildConnect"] = false;
     linkVars["ChildConnectionX"] = DEFAULT_DOUBLE;
     linkVars["ChildConnectionY"] = DEFAULT_DOUBLE;
@@ -361,14 +363,10 @@ void GetConnectionVars(art::Event const & evt, const art::Ptr<recob::PFParticle>
         const TVector3 firstPoint = TVector3(parentTrack->TrajectoryPoint(i).position.X(), parentTrack->TrajectoryPoint(i).position.Y(), parentTrack->TrajectoryPoint(i).position.Z());
         const TVector3 secondPoint = TVector3(parentTrack->TrajectoryPoint(i+1).position.X(), parentTrack->TrajectoryPoint(i+1).position.Y(), parentTrack->TrajectoryPoint(i+1).position.Z());
         const TVector3 midPoint = (secondPoint + firstPoint) * 0.5;
-
-        cumulativeL += (secondPoint - firstPoint).Mag();
         
         // Extrapolate the child to the parent
         TVector3 extrapolationPoint(0.f, 0.f, 0.f);
-        if (!ExtrapolateChildToParent(midPoint, childVertex, childDirection, extrapolationPoint))
-            continue;
-
+        const bool extrapolateBackwards = HierarchyUtils::ExtrapolateChildToParent(midPoint, childVertex, childDirection, extrapolationPoint);
         const float thisDCA = (midPoint - extrapolationPoint).Mag();
 
         if (thisDCA < minDCA)
@@ -376,7 +374,7 @@ void GetConnectionVars(art::Event const & evt, const art::Ptr<recob::PFParticle>
             minDCA = thisDCA;
 
             // Does this connect - be very loose?
-            const float buffer = 5.0;
+            const float buffer = 50.0;
             if (HierarchyUtils::DoesConnect(firstPoint, secondPoint, extrapolationPoint, buffer))
             {
                 linkVars["DoesChildConnect"] = true;
@@ -385,7 +383,7 @@ void GetConnectionVars(art::Event const & evt, const art::Ptr<recob::PFParticle>
                 linkVars["ChildConnectionX"] = midPoint.X();
                 linkVars["ChildConnectionY"] = midPoint.Y();
                 linkVars["ChildConnectionZ"] = midPoint.Z();
-                linkVars["ChildConnectionExtrapDistance"] = (extrapolationPoint - childVertex).Mag();
+                linkVars["ChildConnectionExtrapDistance"] = (extrapolationPoint - childVertex).Mag() * (extrapolateBackwards ? 1.0 : (-1.0));
 
                 const TVector3 midPointDir = (secondPoint - firstPoint).Unit();
 
@@ -394,6 +392,8 @@ void GetConnectionVars(art::Event const & evt, const art::Ptr<recob::PFParticle>
                 linkVars["ChildConnectionDZ"] = midPointDir.Z() * (linkVars["ReverseParent"] ? (-1.0) : 1.0);
             }
         }
+
+        cumulativeL += (secondPoint - firstPoint).Mag();
     }
 
     linkVars["TrackLength"] = cumulativeL;
@@ -409,36 +409,20 @@ void GetConnectionVars(art::Event const & evt, const art::Ptr<recob::PFParticle>
         linkVars["OpeningAngle"] = TVector3(linkVars["ChildConnectionDX"], linkVars["ChildConnectionDY"], linkVars["ChildConnectionDZ"]).Angle(childDirection) * 180.0 / M_PI;
     }
 
-    // If it didn't connect, fill out 'UnderOvershoot' info
+    // If it didn't connect, fill out 'Overshoot' info
     if (!linkVars["DoesChildConnect"])
     {
-        std::vector<bool> isSet = {false, false};
-        std::vector<TVector3> parentPoint = {parentStartpoint, parentEndpoint};
-        std::vector<TVector3> parentDir = {parentStartDirection, parentEndDirection};
-        std::vector<TVector3> extrapolationPoint = {TVector3(0.0, 0.0, 0.0), TVector3(0.0, 0.0, 0.0)};
+        TVector3 extrapolationPoint_start = TVector3(0.0, 0.0, 0.0);
+        const bool extrapolateBackwards_start = HierarchyUtils::ExtrapolateChildToParent(parentStartpoint, childVertex, childDirection, extrapolationPoint_start);
 
-        if (HierarchyUtils::ExtrapolateChildToParent(parentPoint.at(0), childVertex, childDirection, extrapolationPoint.at(0)))
-            isSet.at(0) = true;
+        linkVars["OvershootStartDCA"] = (extrapolationPoint_start - parentStartpoint).Mag() * (extrapolateBackwards_start ? 1.0 : (-1.0));
+        linkVars["OvershootStartL"] = std::fabs((childVertex - parentStartpoint).Dot(parentStartDirection));
+ 
+        TVector3 extrapolationPoint_end = TVector3(0.0, 0.0, 0.0);
+        const bool extrapolateBackwards_end = HierarchyUtils::ExtrapolateChildToParent(parentEndpoint, childVertex, childDirection, extrapolationPoint_end);
 
-        if (HierarchyUtils::ExtrapolateChildToParent(parentPoint.at(1), childVertex, childDirection, extrapolationPoint.at(1)))
-            isSet.at(1) = true;
-
-        for (int i : {0, 1})
-        {
-            if (isSet.at(i) == true)
-            {
-                const double sep = (extrapolationPoint.at(i) - parentPoint.at(i)).Mag();
-
-                if (sep < linkVars["UnderOvershootDCA"])
-                {
-                    linkVars["UnderOvershootDCA"] = sep;
-                    linkVars["UnderOvershootL"] = std::fabs((childVertex - parentPoint.at(i)).Dot(parentDir.at(i)));
-
-                    if (i == 0)
-                        linkVars["UnderOvershootL"] *= (-1.0);
-                }
-            }
-        }
+        linkVars["OvershootEndDCA"] = (extrapolationPoint_end - parentEndpoint).Mag() * (extrapolateBackwards_end ? 1.0 : (-1.0));
+        linkVars["OvershootEndL"] = std::fabs((childVertex - parentEndpoint).Dot(parentEndDirection));
     }
 }
 
@@ -465,12 +449,11 @@ bool ExtrapolateChildToParent(const TVector3 &parentPosition, const TVector3 &ch
     TVector3 &extrapolationPoint)
 {                          
     const double extrapDistance((parentPosition - childVertex).Dot(childDirection));
+    extrapolationPoint = childVertex + (extrapDistance * childDirection);
 
     // make sure we extrapolate the child backwards
     if (extrapDistance > 0.0)
         return false;
-
-    extrapolationPoint = childVertex + (extrapDistance * childDirection);
 
     return true;
 }
@@ -556,14 +539,14 @@ void GetParentConnectionPointVars(art::Event const & evt, const art::Ptr<recob::
     std::vector<TVector3> downstreamEigenvectors;
     HierarchyUtils::RunPCA(downstreamGroup, downstreamEigenvalues, downstreamEigenvectors);
 
-    // Get opening angle from first eigenvectors (this is the longitudinal one)
+    // Get opening angle from first eigenvectors (this is the longitudinal one) - straight would be around 180
     linkVars["ParentConnectionOpeningAngle"] = upstreamEigenvectors.at(0).Angle(downstreamEigenvectors.at(0)) * 180.0 / M_PI;
 
     // Get average transverse eigenvalues, get ratio
     const double upstreamAvTransverseE = (upstreamEigenvalues.at(1) + upstreamEigenvalues.at(2)) / 2.0;
     const double downstreamAvTransverseE = (downstreamEigenvalues.at(1) + downstreamEigenvalues.at(2)) / 2.0;
 
-    linkVars["ParentConnectionEigenValueRatio"] = upstreamAvTransverseE < std::numeric_limits<double>::max() ? 0.0 : (downstreamAvTransverseE / upstreamAvTransverseE);
+    linkVars["ParentConnectionEigenValueRatio"] = upstreamAvTransverseE < std::numeric_limits<double>::epsilon() ? 0.0 : (downstreamAvTransverseE / upstreamAvTransverseE);
 }
 
 /////////////////////////////////////////////////////////////
@@ -717,6 +700,33 @@ double GetSeparation3D(art::Event const & evt, const art::Ptr<recob::PFParticle>
 
     return std::sqrt(closestDistanceSq);
 }
+
+/////////////////////////////////////////////////////////////
+
+double GetSeparation3D(art::Event const & evt, const art::Ptr<recob::PFParticle> pfp, const TVector3 &position,
+    const std::string recoModuleLabel)
+{
+    const std::vector<art::Ptr<recob::SpacePoint>> sps = dune_ana::DUNEAnaPFParticleUtils::GetSpacePoints(pfp, evt, recoModuleLabel);
+
+    if (sps.empty())
+        return DEFAULT_DOUBLE;
+
+    double closestDistanceSq = std::numeric_limits<double>::max();
+
+    for (const art::Ptr<recob::SpacePoint> &sp : sps)
+    {
+        const double dx = sp->XYZ()[0] - position.X();
+        const double dy = sp->XYZ()[1] - position.Y();
+        const double dz = sp->XYZ()[2] - position.Z();
+        const double separation = (dx * dx) + (dy * dy) + (dz * dz);
+
+        if (separation < closestDistanceSq)
+            closestDistanceSq = separation;
+    }
+
+    return std::sqrt(closestDistanceSq);
+}
+
 
 /////////////////////////////////////////////////////////////
 

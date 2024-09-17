@@ -85,6 +85,9 @@ namespace HierarchyUtils
  double GetSeparation3D(art::Event const & evt, const art::Ptr<recob::PFParticle> parentPFP, const art::Ptr<recob::PFParticle> childPFP, 
      const std::string recoModuleLabel);
 
+ double GetSeparation3D(art::Event const & evt, const art::Ptr<recob::PFParticle> pfp, const TVector3 &position,
+     const std::string recoModuleLabel);
+
  double GetChargeRatio(art::Event const & evt, const art::Ptr<recob::PFParticle> parentPFP, const art::Ptr<recob::PFParticle> childPFP, 
      const std::string recoModuleLabel);
 
