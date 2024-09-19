@@ -231,6 +231,7 @@ private:
   int fRecoPFPTrueVisibleParentPDG[kMaxPFParticles];
   int fRecoPFPTrueVisibleParentSelf[kMaxPFParticles];
   int fRecoPFPTrueVisibleParentPFPIndex[kMaxPFParticles];
+  bool fIsHierarchyTrainingNode[kMaxPFParticles];
   double fRecoPFPTrueEnergyEDep[kMaxPFParticles];
   double fRecoPFPTrueMomX[kMaxPFParticles];
   double fRecoPFPTrueMomY[kMaxPFParticles];
@@ -668,6 +669,7 @@ void FDSelection::CCNuSelection::beginJob()
     fTree->Branch("RecoPFPTrueVisibleParentPDG", fRecoPFPTrueVisibleParentPDG, "RecoPFPTrueVisibleParentPDG[NRecoPFPs]/I");
     fTree->Branch("RecoPFPTrueVisibleParentSelf", fRecoPFPTrueVisibleParentSelf, "RecoPFPTrueVisibleParentSelf[NRecoPFPs]/I");
     fTree->Branch("RecoPFPTrueVisibleParentPFPIndex", fRecoPFPTrueVisibleParentPFPIndex, "RecoPFPTrueVisibleParentPFPIndex[NRecoPFPs]/I");
+    fTree->Branch("IsHierarchyTrainingNode", fIsHierarchyTrainingNode, "IsHierarchyTrainingNode[NRecoPFPs]/O");
     fTree->Branch("RecoPFPTrueEnergyEDep", fRecoPFPTrueEnergyEDep, "RecoPFPTrueEnergyEDep[NRecoPFPs]/D");
     fTree->Branch("RecoPFPTrueMomX", fRecoPFPTrueMomX,"RecoPFPTrueMomX[NRecoPFPs]/D");
     fTree->Branch("RecoPFPTrueMomY", fRecoPFPTrueMomY,"RecoPFPTrueMomY[NRecoPFPs]/D");
@@ -1053,6 +1055,7 @@ void FDSelection::CCNuSelection::Reset()
         fRecoPFPTrueVisibleParentPDG[i] = kDefInt;
         fRecoPFPTrueVisibleParentSelf[i] = kDefInt;
         fRecoPFPTrueVisibleParentPFPIndex[i] = kDefInt;
+        fIsHierarchyTrainingNode[i] = false;
         fRecoPFPTrueEnergyEDep[i] = kDefDoub;
         fRecoPFPTrueMomX[i] = kDefDoub;
         fRecoPFPTrueMomY[i] = kDefDoub;
@@ -1685,7 +1688,10 @@ void FDSelection::CCNuSelection::FillPFParticleInfo(art::Event const & evt)
             {
                 fRecoPFPTruePDG[pfpIndex] = matched_mcparticle->PdgCode();
                 fRecoPFPTrueTrackID[pfpIndex] = matched_mcparticle->TrackId();
-                fReconstructedMCParticles.push_back(fRecoPFPTrueTrackID[pfpIndex]);
+
+                // Only class as reconstructed if has 3D rep.
+                if (fRecoPFPRecoNSpacepoints[pfpIndex] != 0)
+                    fReconstructedMCParticles.push_back(fRecoPFPTrueTrackID[pfpIndex]);
 
                 if (matched_mcparticle->Mother() == 0) 
                     fRecoPFPTruePrimary[pfpIndex] = true;
@@ -1839,8 +1845,18 @@ void FDSelection::CCNuSelection::SetTrueGenerationMCInfo(art::Event const & evt,
     if (fNuTrackID == kDefInt)
         return;
 
-    int trueGen = 1; // 1 corresponds to the neutrino
+    // Only consider 3D particles
+    if (fRecoPFPRecoNSpacepoints[pfpIndex] < 1)
+        return;
+
+    // Do we know the match of our particle?
     int currentTrackID = fRecoPFPTrueTrackID[pfpIndex]; // Get the matched track ID
+
+    if (currentTrackID < 0)
+        return;
+
+    // Now search for the parent
+    int trueGen = 1; // 1 corresponds to the neutrino
     bool foundParent = false;
 
     do
@@ -1878,6 +1894,10 @@ void FDSelection::CCNuSelection::SetTrueGenerationMCInfo(art::Event const & evt,
     while (currentTrackID != fNuTrackID);
 
     trueGeneration = trueGen;
+
+    // Mark this PFP as being a good training node
+    if (visibleMode)
+        fIsHierarchyTrainingNode[pfpIndex] = true;
 }
 
 //////////////////////////////////////////////////////////////////////////////////
@@ -2311,8 +2331,8 @@ void FDSelection::CCNuSelection::FillParentChildLinkInfo(art::Event const & evt)
         if (parentPFPIndex >= kMaxPFParticles)
             break;
 
-        // Want to only consider particles with a 3D representation
-        if (fRecoPFPRecoNSpacepoints[parentPFPIndex] == 0)
+        // Is it a good node?
+        if (!fIsHierarchyTrainingNode[parentPFPIndex])
             continue;
 
         // Want to only allow tracks to be parents
@@ -2338,12 +2358,12 @@ void FDSelection::CCNuSelection::FillParentChildLinkInfo(art::Event const & evt)
             if (parentPFP == childPFP)
                 continue;
 
-            // Want to only consider particles with a 3D representation
-            if (fRecoPFPRecoNSpacepoints[childPFPIndex] == 0)
+            // Is it a good node?
+            if (!fIsHierarchyTrainingNode[childPFPIndex])
                 continue;
-        
-            //std::cout << "----------------------------" << std::endl;
 
+
+            // HERE.
             // Increase number of links
             linkIndex++;
             fNParentChildLinks++;
@@ -2391,25 +2411,13 @@ void FDSelection::CCNuSelection::FillTrueParentChildLinkInfo(const int linkIndex
 bool FDSelection::CCNuSelection::IsHigherTierTrainingLink(const int linkIndex, const int parentPFPIndex, 
     const int childPFPIndex)
 {
-    // 1. Does it have 3D hits?
-    if ((fRecoPFPRecoNSpacepoints[parentPFPIndex] == 0) || (fRecoPFPRecoNSpacepoints[childPFPIndex] == 0))
+    // 1. Is it a good node?
+    if ((!fIsHierarchyTrainingNode[parentPFPIndex]) || (!fIsHierarchyTrainingNode[childPFPIndex]))
         return false;
 
-    // 2. Does it have a trackID match?
-    if ((fRecoPFPTrueTrackID[parentPFPIndex] < 0) || (fRecoPFPTrueTrackID[childPFPIndex] < 0))
-        return false;
-
-    // 3. Do we know the parent in terms of trackID?
-    if ((fRecoPFPTrueVisibleParentTrackID[parentPFPIndex] < 0) || (fRecoPFPTrueVisibleParentTrackID[childPFPIndex] < 0))
-        return false;
-
-    // 4. Do we know the parent in terms of 'self'?
+    // 2. Do we know the parent in terms of 'self'?
     if (fRecoPFPTrueVisibleParentSelf[childPFPIndex] < -1) // -1 is for true primary (but we still want to train on these)
         return false;
-
-    // 5. Is the child a primary (child of the nu)?
-    //if (fRecoPFPTrueVisibleGeneration[childPFPIndex] == 2)
-    //return false;
 
     return true;
 }
