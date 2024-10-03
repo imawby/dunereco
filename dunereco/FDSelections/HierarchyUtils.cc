@@ -22,14 +22,88 @@ namespace HierarchyUtils
 
 /////////////////////////////////////////////////////////////
 
-void GetLinkInfo(art::Event const & evt, const art::Ptr<recob::PFParticle> parentPFP, const art::Ptr<recob::PFParticle> childPFP, 
-    const TVector3 &trueParentEndpoint, const TVector3 &trueChildStartpoint,  
+void GetPrimaryLinkInfo(art::Event const & evt, const art::Ptr<recob::PFParticle> pfp, const bool useRecoStart, 
     const std::string recoModuleLabel, const std::string trackModuleLabel, std::map<std::string, double> &linkVars)
 {
     ////////////////////////////////////////////////
     // Set everything to default values
     ////////////////////////////////////////////////
     // General vars
+    linkVars["IsPrimaryLink"] = true; 
+    linkVars["NuVertexSeparation"] = DEFAULT_DOUBLE;
+    // Start region vars
+    linkVars["StartRegionNHits"] = DEFAULT_DOUBLE;
+    linkVars["StartRegionNParticles"] = DEFAULT_DOUBLE;
+    // Parent/child directions
+    linkVars["IsSet"] = false;
+    linkVars["Reverse"] = true;    
+    linkVars["StartX"] = DEFAULT_DOUBLE; linkVars["StartY"] = DEFAULT_DOUBLE; linkVars["StartZ"] = DEFAULT_DOUBLE;    
+    linkVars["StartDX"] = DEFAULT_DOUBLE; linkVars["StartDY"] = DEFAULT_DOUBLE; linkVars["StartDZ"] = DEFAULT_DOUBLE;
+    // Does/where child connects vars
+    linkVars["DCA"] = DEFAULT_DOUBLE;
+    linkVars["ConnectionExtrapDistance"] = DEFAULT_DOUBLE;
+    // Energy asymmetry vars...
+
+    // If we can't find the connection pair then abort!
+    if (!HierarchyUtils::GetChildStartpointAndDirection(evt, pfp, useRecoStart, recoModuleLabel, trackModuleLabel, linkVars))
+        return;
+
+    if (!linkVars["IsSet"])
+        return;
+
+    // Set general vars
+    const TVector3 pfpStartpoint(linkVars["StartX"], linkVars["StartY"], linkVars["StartZ"]);    
+    linkVars["NuVertexSeparation"] = HierarchyUtils::GetNuVertexSeparation(evt, pfpStartpoint, recoModuleLabel);
+
+    // Get start region vars (i know the function is named badly
+    const double separationThreshold = 5.0;
+    HierarchyUtils::GetEndRegionNParticlesAndHits(evt, pfp, recoModuleLabel, separationThreshold, linkVars);
+
+    // Get primary connection vars
+    HierarchyUtils::GetPrimaryConnectionVars(evt, recoModuleLabel, linkVars);
+}
+
+/////////////////////////////////////////////////////////////
+
+void GetPrimaryConnectionVars(art::Event const & evt, const std::string recoModuleLabel, std::map<std::string, double> &linkVars)
+{
+    const TVector3 pfpStartpoint(linkVars["StartX"], linkVars["StartY"], linkVars["StartZ"]);    
+    const TVector3 pfpStartDirection(linkVars["StartDX"], linkVars["StartDY"], linkVars["StartDZ"]);
+
+    if (!dune_ana::DUNEAnaEventUtils::HasNeutrino(evt, recoModuleLabel))
+        return;
+
+    const art::Ptr<recob::PFParticle> &nuPFP = dune_ana::DUNEAnaEventUtils::GetNeutrino(evt, recoModuleLabel);
+
+    try
+    {
+        const art::Ptr<recob::Vertex> &artNuVertex = dune_ana::DUNEAnaPFParticleUtils::GetVertex(nuPFP, evt, recoModuleLabel);
+        const TVector3 nuVertex = TVector3(artNuVertex->position().X(), artNuVertex->position().Y(), artNuVertex->position().Z());
+
+        // Extrapolate the child to the parent
+        TVector3 extrapolationPoint(0.f, 0.f, 0.f);
+        const bool extrapolateBackwards = HierarchyUtils::ExtrapolateChildToParent(nuVertex, pfpStartpoint, pfpStartDirection, extrapolationPoint);
+
+        linkVars["DCA"] = (nuVertex - extrapolationPoint).Mag();
+        linkVars["ConnectionExtrapDistance"] = (extrapolationPoint - pfpStartpoint).Mag() * (extrapolateBackwards ? 1.0 : (-1.0));
+    }
+    catch (...)
+    {
+        return;
+    }
+}
+
+/////////////////////////////////////////////////////////////
+
+void GetLinkInfo(art::Event const & evt, const art::Ptr<recob::PFParticle> parentPFP, const art::Ptr<recob::PFParticle> childPFP, 
+    const bool parentUseRecoStart, const bool childUseRecoStart, const std::string recoModuleLabel, const std::string trackModuleLabel, 
+    std::map<std::string, double> &linkVars)
+{
+    ////////////////////////////////////////////////
+    // Set everything to default values
+    ////////////////////////////////////////////////
+    // General vars
+    linkVars["IsPrimaryLink"] =  false;
     linkVars["ParentNuVertexSeparation"] = DEFAULT_DOUBLE;
     linkVars["ChildNuVertexSeparation"] = DEFAULT_DOUBLE;    
     linkVars["ParentBraggVariable"] = DEFAULT_DOUBLE;
@@ -75,10 +149,10 @@ void GetLinkInfo(art::Event const & evt, const art::Ptr<recob::PFParticle> paren
     linkVars["ParentConnectionOpeningAngle"] = DEFAULT_DOUBLE;
 
     // If we can't find the connection pair then abort!
-    if (!HierarchyUtils::CheatGetParentEndpointAndDirection(evt, parentPFP, trueParentEndpoint, recoModuleLabel, trackModuleLabel, linkVars))
+    if (!HierarchyUtils::GetParentEndpointAndDirection(evt, parentPFP, parentUseRecoStart, recoModuleLabel, trackModuleLabel, linkVars))
         return;
 
-    if (!HierarchyUtils::CheatGetChildStartpointAndDirection(evt, childPFP, trueChildStartpoint, recoModuleLabel, trackModuleLabel, linkVars))
+    if (!HierarchyUtils::GetChildStartpointAndDirection(evt, childPFP, childUseRecoStart, recoModuleLabel, trackModuleLabel, linkVars))
         return;
     
     if (!linkVars["IsParentSet"] || !linkVars["IsChildSet"])
@@ -104,7 +178,7 @@ void GetLinkInfo(art::Event const & evt, const art::Ptr<recob::PFParticle> paren
 
 /////////////////////////////////////////////////////////////
 
-bool CheatGetParentEndpointAndDirection(art::Event const & evt, const art::Ptr<recob::PFParticle> parentPFP, const TVector3 &trueParentEndpoint,
+bool GetParentEndpointAndDirection(art::Event const & evt, const art::Ptr<recob::PFParticle> parentPFP, const bool parentUseRecoStart,
     const std::string recoModuleLabel, const std::string trackModuleLabel, std::map<std::string, double> &linkVars)
 {
     if (!HierarchyUtils::IsPandoraApprovedTrack(evt, parentPFP, recoModuleLabel, trackModuleLabel))
@@ -113,15 +187,13 @@ bool CheatGetParentEndpointAndDirection(art::Event const & evt, const art::Ptr<r
     linkVars["IsParentSet"] = true;
 
     const art::Ptr<recob::Track> &parentTrack = dune_ana::DUNEAnaPFParticleUtils::GetTrack(parentPFP, evt, recoModuleLabel, trackModuleLabel);
-    const float separationSq1 = (trueParentEndpoint - TVector3(parentTrack->Start().X(), parentTrack->Start().Y(), parentTrack->Start().Z())).Mag2();
-    const float separationSq2 = (trueParentEndpoint - TVector3(parentTrack->End().X(), parentTrack->End().Y(), parentTrack->End().Z())).Mag2();
 
     TVector3 parentStartpoint = TVector3(0.f, 0.f, 0.f);
     TVector3 parentEndpoint = TVector3(0.f, 0.f, 0.f);
     TVector3 parentStartDirection = TVector3(0.f, 0.f, 0.f);
     TVector3 parentEndDirection = TVector3(0.f, 0.f, 0.f);
 
-    if (separationSq1 < separationSq2)
+    if (parentUseRecoStart)
     {
         linkVars["ReverseParent"] = true;
         parentStartpoint = TVector3(parentTrack->End().X(), parentTrack->End().Y(), parentTrack->End().Z());
@@ -156,7 +228,7 @@ bool CheatGetParentEndpointAndDirection(art::Event const & evt, const art::Ptr<r
 
 /////////////////////////////////////////////////////////////
 
-bool CheatGetChildStartpointAndDirection(art::Event const & evt, const art::Ptr<recob::PFParticle> childPFP, const TVector3 &trueChildStartpoint,
+bool GetChildStartpointAndDirection(art::Event const & evt, const art::Ptr<recob::PFParticle> childPFP, const bool childUseRecoStart,
     const std::string recoModuleLabel, const std::string trackModuleLabel, std::map<std::string, double> &linkVars)
 {
     TVector3 childStartpoint = TVector3(0.f, 0.f, 0.f);
@@ -164,22 +236,19 @@ bool CheatGetChildStartpointAndDirection(art::Event const & evt, const art::Ptr<
 
     if (HierarchyUtils::IsPandoraApprovedTrack(evt, childPFP, recoModuleLabel, trackModuleLabel))
     {
-        linkVars["IsChildSet"] = true;
+        linkVars[(linkVars["IsPrimaryLink"] ? "IsSet" : "IsChildSet")] = true;
 
         const art::Ptr<recob::Track> &childTrack = dune_ana::DUNEAnaPFParticleUtils::GetTrack(childPFP, evt, recoModuleLabel, trackModuleLabel);
 
-        const float separationSq1 = (trueChildStartpoint - TVector3(childTrack->Start().X(), childTrack->Start().Y(), childTrack->Start().Z())).Mag2();
-        const float separationSq2 = (trueChildStartpoint - TVector3(childTrack->End().X(), childTrack->End().Y(), childTrack->End().Z())).Mag2();
-
-        if (separationSq1 < separationSq2)
+        if (childUseRecoStart)
         {
-            linkVars["ReverseChild"] = false;
+            linkVars[(linkVars["IsPrimaryLink"] ? "Reverse" : "ReverseChild")] = false;
             childStartpoint = TVector3(childTrack->Start().X(), childTrack->Start().Y(), childTrack->Start().Z());
             childDirection = TVector3(childTrack->StartDirection().X(), childTrack->StartDirection().Y(), childTrack->StartDirection().Z());
         }
         else
         {
-            linkVars["ReverseChild"] = true;
+            linkVars[(linkVars["IsPrimaryLink"] ? "Reverse" : "ReverseChild")] = true;
             childStartpoint = TVector3(childTrack->End().X(), childTrack->End().Y(), childTrack->End().Z());
             childDirection = TVector3(childTrack->EndDirection().X(), childTrack->EndDirection().Y(), childTrack->EndDirection().Z()) * (-1.0); // want dir to point along track
         }
@@ -195,8 +264,8 @@ bool CheatGetChildStartpointAndDirection(art::Event const & evt, const art::Ptr<
             if (!HierarchyUtils::GetParticleDirection(evt, childPFP, childStartpoint, recoModuleLabel, 25.0, childDirection))
                 return false;
 
-            linkVars["IsChildSet"] = true;
-            linkVars["ReverseChild"] = false;
+            linkVars[(linkVars["IsPrimaryLink"] ? "IsSet" : "IsChildSet")] = true;
+            linkVars[(linkVars["IsPrimaryLink"] ? "Reverse" : "ReverseChild")] = false;
         }
         catch (...)
         {
@@ -204,12 +273,12 @@ bool CheatGetChildStartpointAndDirection(art::Event const & evt, const art::Ptr<
         }
     }
 
-    linkVars["ChildStartX"] = childStartpoint.X();
-    linkVars["ChildStartY"] = childStartpoint.Y();
-    linkVars["ChildStartZ"] = childStartpoint.Z();
-    linkVars["ChildStartDX"] = childDirection.X();
-    linkVars["ChildStartDY"] = childDirection.Y();
-    linkVars["ChildStartDZ"] = childDirection.Z();
+    linkVars[(linkVars["IsPrimaryLink"] ? "StartX" : "ChildStartX")] = childStartpoint.X();
+    linkVars[(linkVars["IsPrimaryLink"] ? "StartY" : "ChildStartY")] = childStartpoint.Y();
+    linkVars[(linkVars["IsPrimaryLink"] ? "StartZ" : "ChildStartZ")] = childStartpoint.Z();
+    linkVars[(linkVars["IsPrimaryLink"] ? "StartDX" : "ChildStartDX")] = childDirection.X();
+    linkVars[(linkVars["IsPrimaryLink"] ? "StartDY" : "ChildStartDY")] = childDirection.Y();
+    linkVars[(linkVars["IsPrimaryLink"] ? "StartDZ" : "ChildStartDZ")] = childDirection.Z();
 
     return true;
 }
@@ -242,13 +311,6 @@ double GetNuVertexSeparation(art::Event const & evt, const TVector3 &pfpVertex, 
 
 /////////////////////////////////////////////////////////////
 
-double GetBraggVariable()
-{
-    return DEFAULT_DOUBLE;
-}
-
-/////////////////////////////////////////////////////////////
-
 void GetEndRegionVars(art::Event const & evt, const art::Ptr<recob::PFParticle> parentPFP,  
     const std::string recoModuleLabel, std::map<std::string, double> &linkVars)
 {
@@ -263,7 +325,10 @@ void GetEndRegionVars(art::Event const & evt, const art::Ptr<recob::PFParticle> 
 void GetEndRegionNParticlesAndHits(art::Event const & evt, const art::Ptr<recob::PFParticle> parentPFP, const std::string recoModuleLabel, 
     const double separationThreshold, std::map<std::string, double> &linkVars)
 {
-    const TVector3 parentEndpoint(linkVars["ParentEndX"], linkVars["ParentEndY"], linkVars["ParentEndZ"]);
+    const TVector3 parentEndpoint(linkVars["IsPrimaryLink"] ? 
+                                  TVector3(linkVars["StartX"], linkVars["StartY"], linkVars["StartZ"]) :
+                                  TVector3(linkVars["ParentEndX"], linkVars["ParentEndY"], linkVars["ParentEndZ"]));
+
     const std::vector<art::Ptr<recob::PFParticle>> &eventPFPs = dune_ana::DUNEAnaEventUtils::GetPFParticles(evt, recoModuleLabel);
 
     // Count hits near parent endpoint
@@ -295,8 +360,8 @@ void GetEndRegionNParticlesAndHits(art::Event const & evt, const art::Ptr<recob:
             ++particleCount;
     }
 
-    linkVars["ParentEndRegionNHits"] = hitCount;
-    linkVars["ParentEndRegionNParticles"] = particleCount;    
+    linkVars[(linkVars["IsPrimaryLink"] ? "StartRegionNHits" : "ParentEndRegionNHits")] = hitCount;
+    linkVars[(linkVars["IsPrimaryLink"] ? "StartRegionNParticles" : "ParentEndRegionNParticles")] = particleCount;    
 }
 
 /////////////////////////////////////////////////////////////

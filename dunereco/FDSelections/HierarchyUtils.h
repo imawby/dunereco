@@ -36,19 +36,22 @@ namespace HierarchyUtils
  double DEFAULT_DOUBLE = -9999.0;
  int DEFAULT_INT = -999;
 
+ void GetPrimaryLinkInfo(art::Event const & evt, const art::Ptr<recob::PFParticle> pfp, const bool useRecoStart, 
+     const std::string recoModuleLabel, const std::string trackModuleLabel, std::map<std::string, double> &linkVars);
+
+ void GetPrimaryConnectionVars(art::Event const & evt, const std::string recoModuleLabel, std::map<std::string, double> &linkVars);
+
  void GetLinkInfo(art::Event const & evt, const art::Ptr<recob::PFParticle> parentPFP, const art::Ptr<recob::PFParticle> childPFP, 
-     const TVector3 &trueParentEndpoint, const TVector3 &trueChildStartpoint,  
+     const bool parentUseRecoStart, const bool childUseRecoStart, const std::string recoModuleLabel, const std::string trackModuleLabel, 
+     std::map<std::string, double> &linkVars);
+
+ bool GetParentEndpointAndDirection(art::Event const & evt, const art::Ptr<recob::PFParticle> parentPFP, const bool parentUseRecoStart,
      const std::string recoModuleLabel, const std::string trackModuleLabel, std::map<std::string, double> &linkVars);
 
- bool CheatGetParentEndpointAndDirection(art::Event const & evt, const art::Ptr<recob::PFParticle> parentPFP, const TVector3 &trueParentEndpoint,
-     const std::string recoModuleLabel, const std::string trackModuleLabel, std::map<std::string, double> &linkVars);
-
- bool CheatGetChildStartpointAndDirection(art::Event const & evt, const art::Ptr<recob::PFParticle> childPFP, const TVector3 &trueChildStartpoint,
+ bool GetChildStartpointAndDirection(art::Event const & evt, const art::Ptr<recob::PFParticle> childPFP, const bool childUseRecoStart,
      const std::string recoModuleLabel, const std::string trackModuleLabel, std::map<std::string, double> &linkVars);
 
  double GetNuVertexSeparation(art::Event const & evt, const TVector3 &particleVertex, const std::string recoModuleLabel);
-
- double GetBraggVariable();
 
  void GetEndRegionVars(art::Event const & evt, const art::Ptr<recob::PFParticle> parentPFP,  
      const std::string recoModuleLabel, std::map<std::string, double> &linkVars);
