@@ -300,12 +300,12 @@ void FDSelection::PandizzleAlg::FillMVAVariables(const art::Ptr<recob::PFParticl
     fVarHolder.FloatVars["PFPTrackdEdxStart"] = pid->dEdxStart;
     fVarHolder.FloatVars["PFPTrackdEdxEnd"] = pid->dEdxEnd;
     fVarHolder.FloatVars["PFPTrackdEdxEndRatio"] = pid->dEdxEndRatio;
-    std::map<std::string,double> mvaOutMap = pid->mvaOutput;  
-    fVarHolder.FloatVars["PFPTrackMuonMVA"] = mvaOutMap["muon"];
-    fVarHolder.FloatVars["PFPTrackProtonMVA"] = mvaOutMap["proton"];
-    fVarHolder.FloatVars["PFPTrackPionMVA"] = mvaOutMap["pion"];
-    fVarHolder.FloatVars["PFPTrackPhotonMVA"] = mvaOutMap["photon"];
-    fVarHolder.FloatVars["PFPTrackElectronMVA"] = mvaOutMap["electron"];
+    //std::map<std::string,double> mvaOutMap = pid->mvaOutput;  
+    fVarHolder.FloatVars["PFPTrackMuonMVA"] = 0.0; //mvaOutMap["muon"];
+    fVarHolder.FloatVars["PFPTrackProtonMVA"] = 0.0; //mvaOutMap["proton"];
+    fVarHolder.FloatVars["PFPTrackPionMVA"] = 0.0; //mvaOutMap["pion"];
+    fVarHolder.FloatVars["PFPTrackPhotonMVA"] = 0.0; //mvaOutMap["photon"];
+    fVarHolder.FloatVars["PFPTrackElectronMVA"] = 0.0; //mvaOutMap["electron"];
     fVarHolder.BoolVars["MVAVarsFilled"] = true;
   }
 }
@@ -629,7 +629,7 @@ FDSelection::PandizzleAlg::Record FDSelection::PandizzleAlg::RunPID(const art::P
     SetVar(kdEdxEnd, fVarHolder.FloatVars["PFPTrackdEdxEnd"]);
     SetVar(kdEdxEndRatio, fVarHolder.FloatVars["PFPTrackdEdxEndRatio"]);
 
-    return Record(fInputsToReader, fPandizzleReader.EvaluateMVA("BDTG"), true);
+    return Record(fInputsToReader, 0.0 /*fPandizzleReader.EvaluateMVA("BDTG")*/, true);
   }
 
   return ReturnEmptyRecord();
