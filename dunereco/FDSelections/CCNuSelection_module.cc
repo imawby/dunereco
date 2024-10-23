@@ -566,7 +566,7 @@ void FDSelection::CCNuSelection::analyze(art::Event const & evt)
     //std::cout << "HHH" << std::endl;
     FillHierarchyInfo(evt);
     //std::cout << "III" << std::endl;
-    FillPrimaryLinkInfo(evt);
+    //FillPrimaryLinkInfo(evt);
     //std::cout << "JJJ" << std::endl;
     FillParentChildLinkInfo(evt);
     //std::cout << "KKK" << std::endl;
@@ -1991,11 +1991,16 @@ void FDSelection::CCNuSelection::SetTrueGenerationRecoInfo(art::Event const & ev
     {
         const int trackID = fRecoPFPTrueTrackID[pfpIndex];
 
+        std::cout << "pfpIndex: " << pfpIndex << std::endl;
+        std::cout << "trackID: " << trackID << std::endl;
+
         // If we don't know what it is
         if (trackID == kDefInt)
             continue;
 
         const int parentTrackID = fRecoPFPTrueVisibleParentTrackID[pfpIndex];
+
+        std::cout << "parentTrackID: " << parentTrackID << std::endl;
 
         // If it doesn't have a parent
         if (parentTrackID == kDefInt)
@@ -2011,6 +2016,8 @@ void FDSelection::CCNuSelection::SetTrueGenerationRecoInfo(art::Event const & ev
 
         // Search for the parent PFP
         const int parentIndex = this->GetPFPIndexFromTrackID(parentTrackID);
+
+        std::cout << "parentIndex: " << parentIndex<< std::endl;
 
         if (parentIndex != -1)
         {
@@ -2504,7 +2511,7 @@ void FDSelection::CCNuSelection::FillParentChildLinkInfo(art::Event const & evt)
 
         // Want to only allow tracks to be parents
         if (fRecoPFPTrackShowerScore[parentPFPIndex] < 0.5)
-            continue;
+            continue;        
         
         // Loop over all particles as children
         int childPFPIndex = -1;
