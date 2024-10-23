@@ -548,6 +548,14 @@ void FDSelection::CCNuSelection::FillPandoraMaps(art::Event const& evt)
 {
     // MCParticle map
     const std::vector<art::Ptr<simb::MCParticle>> mcParticles = dune_ana::DUNEAnaEventUtils::GetMCParticles(evt, fLargeantModuleLabel);
+
+    for (art::Ptr<simb::MCParticle> mcp : mcParticles)
+    {
+        if (mcp->TrackId() < 0)
+            std::cout << mcp->TrackId() << std::endl;
+    }
+
+
     lar_pandora::LArPandoraHelper::BuildMCParticleMap(mcParticles, fMCParticleMap);
 
     // PFParticle map
@@ -698,7 +706,7 @@ void FDSelection::CCNuSelection::FillPFParticleInfo(art::Event const & evt)
         // Truth information
         auto const clockData = art::ServiceHandle<detinfo::DetectorClocksService>()->DataFor(evt);
         auto const detProp = art::ServiceHandle<detinfo::DetectorPropertiesService>()->DataForJob(clockData);
-        int g4id = TruthMatchUtils::TrueParticleIDFromTotalRecoHits(clockData, pfpHits, 1);
+        int g4id = TruthMatchUtils::TrueParticleIDFromTotalRecoHits(clockData, pfpHits, 0);
 
         if (TruthMatchUtils::Valid(g4id))
         {
