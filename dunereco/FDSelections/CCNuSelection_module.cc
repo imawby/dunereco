@@ -150,6 +150,7 @@ private:
   // Truth
   int fRecoPFPTruePDG[kMaxPFParticles];
   int fRecoPFPTrueTrackID[kMaxPFParticles];
+  bool fRecoPFPIsSaved[kMaxPFParticles];
   bool fRecoPFPTruePrimary[kMaxPFParticles];
   int fRecoPFPTrueGeneration[kMaxPFParticles];
   int fRecoPFPTrueParentTrackID[kMaxPFParticles];
@@ -329,6 +330,7 @@ void FDSelection::CCNuSelection::beginJob()
     // True
     fTree->Branch("MatchedMC_PDG", fRecoPFPTruePDG, "MatchedMC_PDG[Event_NRecoPFPs]/I");
     fTree->Branch("MatchedMC_SimID", fRecoPFPTrueTrackID, "MatchedMC_SimID[Event_NRecoPFPs]/I");
+    fTree->Branch("MatchedMC_IsSaved", fRecoPFPIsSaved, "MatchedMC_IsSaved[Event_NRecoPFPs]/O");
     fTree->Branch("MatchedMC_IsTruePrimary", fRecoPFPTruePrimary,"MatchedMC_IsTruePrimary[Event_NRecoPFPs]/O");
     fTree->Branch("MatchedMC_Generation", fRecoPFPTrueGeneration, "MatchedMC_Generation[Event_NRecoPFPs]/I");
     fTree->Branch("MatchedMC_ParentSimID", fRecoPFPTrueParentTrackID, "MatchedMC_ParentSimID[Event_NRecoPFPs]/I");
@@ -474,6 +476,7 @@ void FDSelection::CCNuSelection::Reset()
         // Truth
         fRecoPFPTruePDG[i] = kDefInt;
         fRecoPFPTrueTrackID[i] = kDefInt;
+        fRecoPFPIsSaved[i] = false;
         fRecoPFPTruePrimary[i] = false;
         fRecoPFPTrueGeneration[i] = kDefInt;
         fRecoPFPTrueParentTrackID[i] = kDefInt;
@@ -718,6 +721,7 @@ void FDSelection::CCNuSelection::FillPFParticleInfo(art::Event const & evt)
 
             if (matched_mcparticle)
             {
+                fRecoPFPIsSaved[pfpIndex] = (g4id < 0) ? false : true;
                 fRecoPFPTruePDG[pfpIndex] = matched_mcparticle->PdgCode();
                 fRecoPFPTrueTrackID[pfpIndex] = matched_mcparticle->TrackId();
 
