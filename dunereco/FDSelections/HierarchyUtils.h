@@ -41,7 +41,23 @@ namespace HierarchyUtils
 
  void GetPrimaryConnectionVars(art::Event const & evt, const std::string recoModuleLabel, std::map<std::string, double> &linkVars);
 
+ void GetPrimaryEventContextVars(art::Event const & evt, const art::Ptr<recob::PFParticle> pfp, const bool useRecoStart, 
+     const std::string recoModuleLabel, const std::string trackModuleLabel, std::map<std::string, double> &linkVars);
+
+ bool GetEventContextVarsForShower(const TVector3 &recoNuVertex, const TVector3 &pfpStartpoint, 
+ const TVector3 &pfpStartDirection);
+
+ bool GetEventContextVarsForTrack(const art::Ptr<recob::Track> &track, const bool useRecoStart, const TVector3 &recoNuVertex);
+
  void GetLinkInfo(art::Event const & evt, const art::Ptr<recob::PFParticle> parentPFP, const art::Ptr<recob::PFParticle> childPFP, 
+     const bool parentUseRecoStart, const bool childUseRecoStart, const std::string recoModuleLabel, const std::string trackModuleLabel, 
+     std::map<std::string, double> &linkVars);
+
+ void CalculateTrainingCuts(std::map<std::string, double> &linkVars, double stepSize, double &trainingCutL, double &trainingCutT);
+
+ bool IsInFV(const TVector3 &position);
+
+ void GetEventContextVars(art::Event const & evt, const art::Ptr<recob::PFParticle> parentPFP, const art::Ptr<recob::PFParticle> childPFP,
      const bool parentUseRecoStart, const bool childUseRecoStart, const std::string recoModuleLabel, const std::string trackModuleLabel, 
      std::map<std::string, double> &linkVars);
 

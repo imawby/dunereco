@@ -43,6 +43,8 @@ void GetPrimaryLinkInfo(art::Event const & evt, const art::Ptr<recob::PFParticle
     linkVars["DCA"] = DEFAULT_DOUBLE;
     linkVars["ConnectionExtrapDistance"] = DEFAULT_DOUBLE;
     // Energy asymmetry vars...
+    // Event context vars
+    linkVars["IsPOIClosestToNu"] = false;
 
     // If we can't find the connection pair then abort!
     if (!HierarchyUtils::GetChildStartpointAndDirection(evt, pfp, useRecoStart, recoModuleLabel, trackModuleLabel, linkVars))
@@ -61,17 +63,21 @@ void GetPrimaryLinkInfo(art::Event const & evt, const art::Ptr<recob::PFParticle
 
     // Get primary connection vars
     HierarchyUtils::GetPrimaryConnectionVars(evt, recoModuleLabel, linkVars);
+
+    // Get primary event context vars
+    HierarchyUtils::GetPrimaryEventContextVars(evt, pfp, useRecoStart, recoModuleLabel, 
+        trackModuleLabel, linkVars);
 }
 
 /////////////////////////////////////////////////////////////
 
 void GetPrimaryConnectionVars(art::Event const & evt, const std::string recoModuleLabel, std::map<std::string, double> &linkVars)
 {
-    const TVector3 pfpStartpoint(linkVars["StartX"], linkVars["StartY"], linkVars["StartZ"]);    
-    const TVector3 pfpStartDirection(linkVars["StartDX"], linkVars["StartDY"], linkVars["StartDZ"]);
-
     if (!dune_ana::DUNEAnaEventUtils::HasNeutrino(evt, recoModuleLabel))
         return;
+
+    const TVector3 pfpStartpoint(linkVars["StartX"], linkVars["StartY"], linkVars["StartZ"]);    
+    const TVector3 pfpStartDirection(linkVars["StartDX"], linkVars["StartDY"], linkVars["StartDZ"]);
 
     const art::Ptr<recob::PFParticle> &nuPFP = dune_ana::DUNEAnaEventUtils::GetNeutrino(evt, recoModuleLabel);
 
@@ -91,6 +97,65 @@ void GetPrimaryConnectionVars(art::Event const & evt, const std::string recoModu
     {
         return;
     }
+}
+
+/////////////////////////////////////////////////////////////
+
+void GetPrimaryEventContextVars(art::Event const & evt, const art::Ptr<recob::PFParticle> pfp, const bool useRecoStart, 
+    const std::string recoModuleLabel, const std::string trackModuleLabel, std::map<std::string, double> &linkVars)
+{
+    if (!dune_ana::DUNEAnaEventUtils::HasNeutrino(evt, recoModuleLabel))
+        return;
+
+   const art::Ptr<recob::PFParticle> &nuPFP = dune_ana::DUNEAnaEventUtils::GetNeutrino(evt, recoModuleLabel);
+
+    try
+    {
+        const art::Ptr<recob::Vertex> &artNuVertex = dune_ana::DUNEAnaPFParticleUtils::GetVertex(nuPFP, evt, recoModuleLabel);
+        const TVector3 recoNuVertex = TVector3(artNuVertex->position().X(), artNuVertex->position().Y(), artNuVertex->position().Z());
+
+        // Work out if POI is closest to nu vertex
+        if (!HierarchyUtils::IsPandoraApprovedTrack(evt, pfp, recoModuleLabel, trackModuleLabel))
+        {
+            const TVector3 pfpStartpoint(linkVars["StartX"], linkVars["StartY"], linkVars["StartZ"]);
+            const TVector3 pfpStartDirection(linkVars["StartDX"], linkVars["StartDY"], linkVars["StartDZ"]);
+            linkVars["IsPOIClosestToNu"] = HierarchyUtils::GetEventContextVarsForShower(recoNuVertex, pfpStartpoint, pfpStartDirection);
+        }
+        else
+        {
+            const art::Ptr<recob::Track> &track = dune_ana::DUNEAnaPFParticleUtils::GetTrack(pfp, evt, recoModuleLabel, trackModuleLabel);
+            linkVars["IsPOIClosestToNu"] = HierarchyUtils::GetEventContextVarsForTrack(track, useRecoStart, recoNuVertex);
+        }
+    }
+    catch (...)
+    {
+        return;
+    }
+}
+
+/////////////////////////////////////////////////////////////
+
+bool GetEventContextVarsForShower(const TVector3 &recoNuVertex, const TVector3 &pfpStartpoint, 
+    const TVector3 &pfpStartDirection)
+{
+    const bool isPOIClosestToNu = (pfpStartDirection.Dot(pfpStartpoint - recoNuVertex) < 0.0) ? false : true;
+
+    return isPOIClosestToNu;
+}
+
+/////////////////////////////////////////////////////////////                                                                                                                                                                               
+bool GetEventContextVarsForTrack(const art::Ptr<recob::Track> &track, const bool useRecoStart, const TVector3 &recoNuVertex)
+{
+    // If track then compare the two endpoints
+    const TVector3 positionPOI = useRecoStart ? TVector3(track->Start().X(), track->Start().Y(), track->Start().Z()) : 
+        TVector3(track->End().X(), track->End().Y(), track->End().Z());
+    const TVector3 positionOther = useRecoStart ? TVector3(track->End().X(), track->End().Y(), track->End().Z()) :
+        TVector3(track->Start().X(), track->Start().Y(), track->Start().Z());
+    const double sepPOI = (positionPOI - recoNuVertex).Mag2();
+    const double sepOther = (positionOther - recoNuVertex).Mag2();
+    const bool isPOIClosestToNu = (sepPOI < sepOther);
+
+    return isPOIClosestToNu;
 }
 
 /////////////////////////////////////////////////////////////
@@ -147,6 +212,9 @@ void GetLinkInfo(art::Event const & evt, const art::Ptr<recob::PFParticle> paren
     linkVars["ParentConnectionNHitRatio"] = DEFAULT_DOUBLE;
     linkVars["ParentConnectionEigenValueRatio"] = DEFAULT_DOUBLE;
     linkVars["ParentConnectionOpeningAngle"] = DEFAULT_DOUBLE;
+    // Event context vars
+    linkVars["IsParentPOIClosestToNu"] = false;
+    linkVars["IsChildPOIClosestToNu"] = false;
 
     // If we can't find the connection pair then abort!
     if (!HierarchyUtils::GetParentEndpointAndDirection(evt, parentPFP, parentUseRecoStart, recoModuleLabel, trackModuleLabel, linkVars))
@@ -174,6 +242,112 @@ void GetLinkInfo(art::Event const & evt, const art::Ptr<recob::PFParticle> paren
     HierarchyUtils::GetConnectionVars(evt, parentPFP, childPFP, recoModuleLabel, trackModuleLabel, linkVars);
     // Splitting parent vars
     HierarchyUtils::GetParentConnectionPointVars(evt, parentPFP, recoModuleLabel, 10.0, linkVars);    
+    // Get event context information
+    HierarchyUtils::GetEventContextVars(evt, parentPFP, childPFP, parentUseRecoStart, childUseRecoStart, 
+        recoModuleLabel, trackModuleLabel, linkVars);
+}
+
+/////////////////////////////////////////////////////////////
+
+// step size == 1.0cm
+
+void CalculateTrainingCuts(std::map<std::string, double> &linkVars, double stepSize, double &trainingCutL, double &trainingCutT)
+{
+    const TVector3 childStartPos = TVector3(linkVars["ChildStartX"], linkVars["ChildStartY"], linkVars["ChildStartZ"]);
+    const TVector3 childStartDir = TVector3(linkVars["ChildStartDX"], linkVars["ChildStartDY"], linkVars["ChildStartDZ"]) * -1.0; //Need to turn it around
+    const TVector3 parentEndPos = TVector3(linkVars["ParentEndX"], linkVars["ParentEndY"], linkVars["ParentEndZ"]);
+    const TVector3 parentEndDir = TVector3(linkVars["ParentEndDX"], linkVars["ParentEndDY"], linkVars["ParentEndDZ"]);
+
+    double smallestT = std::numeric_limits<double>::max();
+    TVector3 connectionPoint = TVector3(-999.0, -999.0, -999.0);
+    bool found = false;
+
+    // start the seed
+    TVector3 extrapolatedPoint = childStartPos;
+
+    while (HierarchyUtils::IsInFV(extrapolatedPoint))
+    {
+        extrapolatedPoint = extrapolatedPoint + (childStartDir * 1.0);
+        const double parentDir_t = parentEndDir.Cross((extrapolatedPoint - parentEndPos)).Mag();
+
+        if (parentDir_t < smallestT)
+        {
+            smallestT = parentDir_t;
+            connectionPoint = extrapolatedPoint;
+            found = true;
+        }
+    }
+
+    // set training cuts
+    trainingCutL = found ? parentEndDir.Dot(connectionPoint - parentEndPos) : -999.0; // parentDir_l
+    trainingCutT = found ? (childStartPos - connectionPoint).Mag() : -999.0; // childDir_t
+}
+
+/////////////////////////////////////////////////////////////
+
+bool IsInFV(const TVector3 &position)
+{
+    double minX = -360.0, maxX = 360.0;
+    double minY = -600.0, maxY = 600.0;
+    double minZ = 0.0, maxZ = 1394.0;
+
+    if ((position.X() < minX) or (position.X() > maxX))
+        return false;
+
+    if ((position.Y() < minY) or (position.Y() > maxY))
+        return false;
+
+    if ((position.Z() < minZ) or (position.Z() > maxZ))
+        return false;
+
+    return true;
+}
+
+/////////////////////////////////////////////////////////////
+
+void GetEventContextVars(art::Event const & evt, const art::Ptr<recob::PFParticle> parentPFP, const art::Ptr<recob::PFParticle> childPFP,
+    const bool parentUseRecoStart, const bool childUseRecoStart, const std::string recoModuleLabel, const std::string trackModuleLabel, 
+    std::map<std::string, double> &linkVars)
+{
+    if (!dune_ana::DUNEAnaEventUtils::HasNeutrino(evt, recoModuleLabel))
+        return;
+
+   const art::Ptr<recob::PFParticle> &nuPFP = dune_ana::DUNEAnaEventUtils::GetNeutrino(evt, recoModuleLabel);
+
+    try
+    {
+        const art::Ptr<recob::Vertex> &artNuVertex = dune_ana::DUNEAnaPFParticleUtils::GetVertex(nuPFP, evt, recoModuleLabel);
+        const TVector3 recoNuVertex = TVector3(artNuVertex->position().X(), artNuVertex->position().Y(), artNuVertex->position().Z());
+
+        // For child
+        if (!HierarchyUtils::IsPandoraApprovedTrack(evt, childPFP, recoModuleLabel, trackModuleLabel))
+        {
+            const TVector3 childStartpoint(linkVars["ChildStartX"], linkVars["ChildStartY"], linkVars["ChildStartZ"]);
+            const TVector3 childStartDirection(linkVars["ChildStartDX"], linkVars["ChildStartDY"], linkVars["ChildStartDZ"]);
+            linkVars["IsChildPOIClosestToNu"] = HierarchyUtils::GetEventContextVarsForShower(recoNuVertex, childStartpoint, childStartDirection);
+        }
+        else
+        {
+            const art::Ptr<recob::Track> &childTrack = dune_ana::DUNEAnaPFParticleUtils::GetTrack(childPFP, evt, recoModuleLabel, trackModuleLabel);
+            linkVars["IsChildPOIClosestToNu"] = HierarchyUtils::GetEventContextVarsForTrack(childTrack, childUseRecoStart, recoNuVertex);
+        }
+
+        // For parent (should never be a shower)
+        if (!HierarchyUtils::IsPandoraApprovedTrack(evt, parentPFP, recoModuleLabel, trackModuleLabel))
+        {
+            std::cout << "Parent is a shower! eek!" << std::endl;
+            throw;
+        }
+        else
+        {
+            const art::Ptr<recob::Track> &parentTrack = dune_ana::DUNEAnaPFParticleUtils::GetTrack(parentPFP, evt, recoModuleLabel, trackModuleLabel);
+            linkVars["IsParentPOIClosestToNu"] = HierarchyUtils::GetEventContextVarsForTrack(parentTrack, parentUseRecoStart, recoNuVertex);
+        }
+    }
+    catch (...)
+    {
+        return;
+    }
 }
 
 /////////////////////////////////////////////////////////////
@@ -1034,9 +1208,6 @@ bool GetParentChildVerticesAndDirections(art::Event const & evt, const art::Ptr<
         
         for (unsigned int iChild = 0; iChild < childPositions.size(); ++iChild)
         {
-            std::cout << "iParent: " << iParent << std::endl;
-            std::cout << "iChild: " << iChild << std::endl;
-
             const TVector3 &childPosition = childPositions.at(iChild);
             const TVector3 &childDirection = childDirections.at(iChild);            
 
@@ -1046,8 +1217,6 @@ bool GetParentChildVerticesAndDirections(art::Event const & evt, const art::Ptr<
                 std::cout << "CANNOT EXTRAOPLATE!" << std::endl;
                 continue;
             }
-
-            std::cout << "CAN EXTRAPOLATE!" << std::endl;
 
             const double sepSq = (extrapolationPoint - parentPosition).Mag2();
 

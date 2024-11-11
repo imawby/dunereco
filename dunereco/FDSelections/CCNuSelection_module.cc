@@ -116,9 +116,6 @@ private:
   bool IsTrueParentChildLink(const int parentPFPIndex, const int childPFPIndex);
   bool IsHigherTierTrainingLink(const int parentPFPIndex, const int childPFPIndex);
   bool IsLinkOrientationCorrect(const int parentIndex, const int childIndex, const bool parentUseRecoStart, const bool childUseRecoStart);
-  void FillRecoParentChildLinkInfo(art::Event const & evt, const art::Ptr<recob::PFParticle> childPFP, 
-    art::Ptr<recob::PFParticle> parentPFP, const int childIndex, const int parentIndex, 
-    const bool childUseRecoStart, const bool parentUseRecoStart, const int linkIndex);
   void RunTrackSelection(art::Event const & evt);
   void RunPandizzleTrackSelection();
   void RunDeepPanTrackSelection();
@@ -413,6 +410,7 @@ private:
   int fPrimaryStartRegionNParticles[kMaxPrimaryLinks];
   double fPrimaryDCA[kMaxPrimaryLinks];
   double fPrimaryConnectionExtrapDistance[kMaxPrimaryLinks];
+  bool fPrimaryIsPOIClosestToNu[kMaxPrimaryLinks];
   // Truth - HigherTier
   bool fTrueParentChildLink[kMaxParentChildLinks];
   bool fIsHigherTierTrainingLink[kMaxParentChildLinks];
@@ -476,6 +474,10 @@ private:
   double fParentConnectionPointNHitRatio[kMaxParentChildLinks];
   double fParentConnectionPointEigenValueRatio[kMaxParentChildLinks];
   double fParentConnectionPointOpeningAngle[kMaxParentChildLinks];
+  bool fIsParentPOIClosestToNu[kMaxParentChildLinks];
+  bool fIsChildPOIClosestToNu[kMaxParentChildLinks];
+  double fTrainingCutL[kMaxParentChildLinks];
+  double fTrainingCutT[kMaxParentChildLinks];
   double fChargeRatio[kMaxParentChildLinks];
   double fPIDLinkType[kMaxParentChildLinks];
   double fPIDLinkType_cheat[kMaxParentChildLinks];
@@ -566,7 +568,7 @@ void FDSelection::CCNuSelection::analyze(art::Event const & evt)
     //std::cout << "HHH" << std::endl;
     FillHierarchyInfo(evt);
     //std::cout << "III" << std::endl;
-    //FillPrimaryLinkInfo(evt);
+    FillPrimaryLinkInfo(evt);
     //std::cout << "JJJ" << std::endl;
     FillParentChildLinkInfo(evt);
     //std::cout << "KKK" << std::endl;
@@ -885,6 +887,7 @@ void FDSelection::CCNuSelection::beginJob()
     fTree->Branch("PrimaryStartRegionNParticles", &fPrimaryStartRegionNParticles, "PrimaryStartRegionNParticles[NPrimaryLinks]/I");
     fTree->Branch("PrimaryDCA", &fPrimaryDCA, "PrimaryDCA[NPrimaryLinks]/D");
     fTree->Branch("PrimaryConnectionExtrapDistance", &fPrimaryConnectionExtrapDistance, "PrimaryConnectionExtrapDistance[NPrimaryLinks]/D");
+    fTree->Branch("PrimaryIsPOIClosestToNu", &fPrimaryIsPOIClosestToNu, "PrimaryIsPOIClosestToNu[NPrimaryLinks]/O");
 
     fTree->Branch("NParentChildLinks", &fNParentChildLinks);
     // Truth
@@ -948,6 +951,10 @@ void FDSelection::CCNuSelection::beginJob()
     fTree->Branch("ParentConnectionPointNHitRatio", &fParentConnectionPointNHitRatio, "ParentConnectionPointNHitRatio[NParentChildLinks]/D");
     fTree->Branch("ParentConnectionPointEigenValueRatio", &fParentConnectionPointEigenValueRatio, "ParentConnectionPointEigenValueRatio[NParentChildLinks]/D");
     fTree->Branch("ParentConnectionPointOpeningAngle", &fParentConnectionPointOpeningAngle, "ParentConnectionPointOpeningAngle[NParentChildLinks]/D");
+    fTree->Branch("IsParentPOIClosestToNu", &fIsParentPOIClosestToNu, "IsParentPOIClosestToNu[NParentChildLinks]/O");
+    fTree->Branch("IsChildPOIClosestToNu", &fIsChildPOIClosestToNu, "IsChildPOIClosestToNu[NParentChildLinks]/O");
+    fTree->Branch("TrainingCutL", &fTrainingCutL, "TrainingCutL[NParentChildLinks]/D");
+    fTree->Branch("TrainingCutT", &fTrainingCutT, "TrainingCutT[NParentChildLinks]/D");
     fTree->Branch("ChargeRatio", &fChargeRatio, "ChargeRatio[NParentChildLinks]/D");
     fTree->Branch("PIDLinkType", &fPIDLinkType, "PIDLinkType[NParentChildLinks]/D");
     fTree->Branch("PIDLinkType_cheat", &fPIDLinkType_cheat, "PIDLinkType_cheat[NParentChildLinks]/D");
@@ -1295,6 +1302,7 @@ void FDSelection::CCNuSelection::Reset()
         fPrimaryStartRegionNParticles[i] = kDefInt;
         fPrimaryDCA[i] = kDefDoub;
         fPrimaryConnectionExtrapDistance[i] = kDefDoub;
+        fPrimaryIsPOIClosestToNu[i] = false;
     }
     fNParentChildLinks = 0;
     for (int i = 0; i < kMaxParentChildLinks; i++)
@@ -1360,6 +1368,10 @@ void FDSelection::CCNuSelection::Reset()
         fParentConnectionPointNHitRatio[i] = kDefDoub;
         fParentConnectionPointEigenValueRatio[i] = kDefDoub;
         fParentConnectionPointOpeningAngle[i] = kDefDoub;
+        fIsParentPOIClosestToNu[i] = false;
+        fIsChildPOIClosestToNu[i] = false;
+        fTrainingCutL[i] = kDefDoub;
+        fTrainingCutT[i] = kDefDoub;
         fChargeRatio[i] = kDefDoub;
         fPIDLinkType[i] = kDefDoub;
         fPIDLinkType_cheat[i] = kDefDoub;
@@ -1991,16 +2003,11 @@ void FDSelection::CCNuSelection::SetTrueGenerationRecoInfo(art::Event const & ev
     {
         const int trackID = fRecoPFPTrueTrackID[pfpIndex];
 
-        std::cout << "pfpIndex: " << pfpIndex << std::endl;
-        std::cout << "trackID: " << trackID << std::endl;
-
         // If we don't know what it is
         if (trackID == kDefInt)
             continue;
 
         const int parentTrackID = fRecoPFPTrueVisibleParentTrackID[pfpIndex];
-
-        std::cout << "parentTrackID: " << parentTrackID << std::endl;
 
         // If it doesn't have a parent
         if (parentTrackID == kDefInt)
@@ -2016,8 +2023,6 @@ void FDSelection::CCNuSelection::SetTrueGenerationRecoInfo(art::Event const & ev
 
         // Search for the parent PFP
         const int parentIndex = this->GetPFPIndexFromTrackID(parentTrackID);
-
-        std::cout << "parentIndex: " << parentIndex<< std::endl;
 
         if (parentIndex != -1)
         {
@@ -2432,10 +2437,29 @@ void FDSelection::CCNuSelection::FillPrimaryLinkInfo(art::Event const & evt)
         if (!fIsHierarchyTrainingNode[pfpIndex])
             continue;
 
+        // Is track?
+        const bool isTrack = (HierarchyUtils::GetTrackScore(evt, pfp, fRecoModuleLabel) > 0.5);
+        const bool isFitted = isTrack ? dune_ana::DUNEAnaPFParticleUtils::IsTrack(pfp, evt, fRecoModuleLabel, fTrackModuleLabel) :
+            dune_ana::DUNEAnaPFParticleUtils::IsShower(pfp, evt, fRecoModuleLabel, fShowerModuleLabel);
+
+        if (!isFitted)       
+            continue;
+
+        int count = 0;
+
         for (bool useRecoStart : {true, false})
         {
-            if ((!useRecoStart) && (fRecoPFPTrackShowerScore[pfpIndex] < 0.5))
+            if ((!useRecoStart) && (!isTrack))
                 continue;
+
+            std::map<std::string, double> linkVars;
+            HierarchyUtils::GetPrimaryLinkInfo(evt, pfp, useRecoStart, fRecoModuleLabel, fTrackModuleLabel, linkVars);
+
+            // this will ensure that it is filled twice (I think)
+            if (!linkVars["IsSet"])
+                continue;
+
+            ++count;
 
             // Increase number of links
             primaryLinkIndex++;
@@ -2446,9 +2470,6 @@ void FDSelection::CCNuSelection::FillPrimaryLinkInfo(art::Event const & evt)
             fIsPrimaryLinkOrientationCorrect[primaryLinkIndex] = FDSelection::CCNuSelection::IsPrimaryLinkOrientationCorrect(pfpIndex, useRecoStart);
             fTruePrimaryPDG[primaryLinkIndex] = fRecoPFPTruePDG[pfpIndex];
             // Reco
-            std::map<std::string, double> linkVars;
-            HierarchyUtils::GetPrimaryLinkInfo(evt, pfp, useRecoStart, fRecoModuleLabel, fTrackModuleLabel, linkVars);
-
             fPrimaryPFPIndex[primaryLinkIndex] = pfpIndex;
             fPrimaryNSpacepoints[primaryLinkIndex] = fRecoPFPRecoNSpacepoints[pfpIndex];
             fPrimaryCompleteness[primaryLinkIndex] = fRecoPFPRecoCompleteness[pfpIndex];
@@ -2465,6 +2486,20 @@ void FDSelection::CCNuSelection::FillPrimaryLinkInfo(art::Event const & evt)
             fPrimaryStartRegionNParticles[primaryLinkIndex] = linkVars["StartRegionNParticles"];
             fPrimaryDCA[primaryLinkIndex] = linkVars["DCA"];
             fPrimaryConnectionExtrapDistance[primaryLinkIndex] = linkVars["ConnectionExtrapDistance"];
+            fPrimaryIsPOIClosestToNu[primaryLinkIndex] = linkVars["IsPOIClosestToNu"];
+        }
+
+        // Just check that we are doing all orientations
+        if (((count != 1) && (count != 0)) && (!isTrack))
+        {
+            std::cout << "SHOWER: NOT ALL ORIENTATIONS COVERED" << std::endl;
+            throw;
+        }
+
+        if (((count != 2) && (count != 0)) && (isTrack))
+        {
+            std::cout << "TRACK: NOT ALL ORIENTATIONS COVERED" << std::endl;
+            throw;
         }
     }
 }
@@ -2509,8 +2544,12 @@ void FDSelection::CCNuSelection::FillParentChildLinkInfo(art::Event const & evt)
         if (!fIsHierarchyTrainingNode[parentPFPIndex])
             continue;
 
-        // Want to only allow tracks to be parents
-        if (fRecoPFPTrackShowerScore[parentPFPIndex] < 0.5)
+        // Is parent a track?
+        const bool isParentTrack = (HierarchyUtils::GetTrackScore(evt, parentPFP, fRecoModuleLabel) > 0.5);
+        const bool isParentFitted = isParentTrack ? dune_ana::DUNEAnaPFParticleUtils::IsTrack(parentPFP, evt, fRecoModuleLabel, fTrackModuleLabel) :
+            dune_ana::DUNEAnaPFParticleUtils::IsShower(parentPFP, evt, fRecoModuleLabel, fShowerModuleLabel);
+
+        if ((!isParentTrack) || (isParentTrack && !isParentFitted))
             continue;        
         
         // Loop over all particles as children
@@ -2542,6 +2581,14 @@ void FDSelection::CCNuSelection::FillParentChildLinkInfo(art::Event const & evt)
             if (!isHigherTierTrainingLink)
                 continue;
 
+            // Is child a track?
+            const bool isChildTrack = (HierarchyUtils::GetTrackScore(evt, childPFP, fRecoModuleLabel) > 0.5);
+            const bool isChildFitted = isChildTrack ? dune_ana::DUNEAnaPFParticleUtils::IsTrack(childPFP, evt, fRecoModuleLabel, fTrackModuleLabel) :
+                dune_ana::DUNEAnaPFParticleUtils::IsShower(childPFP, evt, fRecoModuleLabel, fShowerModuleLabel);
+
+            if (!isChildFitted)       
+                continue;
+
             // Get truth info
             const bool trueParentChildLink = FDSelection::CCNuSelection::IsTrueParentChildLink(parentPFPIndex, childPFPIndex);
 
@@ -2552,15 +2599,26 @@ void FDSelection::CCNuSelection::FillParentChildLinkInfo(art::Event const & evt)
             const int pidLinkType_cheat = HierarchyUtils::GetPIDLinkTypeWithPDG(fRecoPFPTruePDG[parentPFPIndex], fRecoPFPTruePDG[childPFPIndex]);    
             const int trackShowerLinkType =  HierarchyUtils::GetTrackShowerLinkType(evt, parentPFP, childPFP, fRecoModuleLabel);
 
+            int count = 0;
+            double trainingCutL = -999.0;
+            double trainingCutT = -999.0;
+
             // Go through all possible orientations
             for (bool parentUseRecoStart : {true, false})
             {
                 for (bool childUseRecoStart : {true, false})
                 {
-                    if ((!childUseRecoStart) && (fRecoPFPTrackShowerScore[childPFPIndex] < 0.5))
+                    if ((!childUseRecoStart) && (!isChildTrack))
                         continue;
 
+                    std::map<std::string, double> linkVars;
+                    HierarchyUtils::GetLinkInfo(evt, parentPFP, childPFP, parentUseRecoStart, childUseRecoStart, fRecoModuleLabel, fTrackModuleLabel, linkVars);
+
+                    if (!linkVars["IsParentSet"] || !linkVars["IsChildSet"])
+                        continue;                    
+
                     // Increase number of links
+                    ++count;
                     linkIndex++;
                     fNParentChildLinks++;
 
@@ -2569,6 +2627,11 @@ void FDSelection::CCNuSelection::FillParentChildLinkInfo(art::Event const & evt)
                     fIsHigherTierTrainingLink[linkIndex] = isHigherTierTrainingLink;
                     fTrueParentChildLink[linkIndex] = trueParentChildLink;
                     fIsLinkOrientationCorrect[linkIndex] = FDSelection::CCNuSelection::IsLinkOrientationCorrect(parentPFPIndex, childPFPIndex, parentUseRecoStart, childUseRecoStart);
+
+                    // Training cuts
+                    if (fIsLinkOrientationCorrect[linkIndex])
+                        HierarchyUtils::CalculateTrainingCuts(linkVars, 1.0, trainingCutL, trainingCutT);
+
                     // Reco
                     fParentPFPIndex[linkIndex] = parentPFPIndex;
                     fChildPFPIndex[linkIndex] = childPFPIndex;
@@ -2586,8 +2649,80 @@ void FDSelection::CCNuSelection::FillParentChildLinkInfo(art::Event const & evt)
                     fTrackShowerLinkType[linkIndex] =  trackShowerLinkType;
 
                     // Fill orientation dependent info
-                    FillRecoParentChildLinkInfo(evt, childPFP, parentPFP, childPFPIndex, parentPFPIndex, childUseRecoStart, parentUseRecoStart, linkIndex);
+                    fChildStartX[linkIndex] = linkVars["ChildStartX"];
+                    fChildStartY[linkIndex] = linkVars["ChildStartY"];
+                    fChildStartZ[linkIndex] = linkVars["ChildStartZ"];
+                    fChildStartDX[linkIndex] = linkVars["ChildStartDX"];
+                    fChildStartDY[linkIndex] = linkVars["ChildStartDY"];
+                    fChildStartDZ[linkIndex] = linkVars["ChildStartDZ"];
+                    fParentEndX[linkIndex] = linkVars["ParentEndX"];
+                    fParentEndY[linkIndex] = linkVars["ParentEndY"];
+                    fParentEndZ[linkIndex] = linkVars["ParentEndZ"];
+                    fParentEndDX[linkIndex] = linkVars["ParentEndDX"];
+                    fParentEndDY[linkIndex] = linkVars["ParentEndDY"];
+                    fParentEndDZ[linkIndex] = linkVars["ParentEndDZ"];
+                    fParentStartX[linkIndex] = linkVars["ParentStartX"];
+                    fParentStartY[linkIndex] = linkVars["ParentStartY"];
+                    fParentStartZ[linkIndex] = linkVars["ParentStartZ"];
+                    fParentStartDX[linkIndex] = linkVars["ParentStartDX"];
+                    fParentStartDY[linkIndex] = linkVars["ParentStartDY"];
+                    fParentStartDZ[linkIndex] = linkVars["ParentStartDZ"];
+                    // General vars
+                    fParentNuVertexSeparation[linkIndex] = linkVars["ParentNuVertexSeparation"];
+                    fChildNuVertexSeparation[linkIndex] = linkVars["ChildNuVertexSeparation"];
+                    fParentBraggVariable[linkIndex] = linkVars["ParentBraggVariable"];
+                    fOpeningAngle[linkIndex] = linkVars["OpeningAngle"];
+                    fVertexSeparation[linkIndex] = linkVars["VertexSeparation"];    
+                    // End region vars
+                    fParentEndRegionNHits[linkIndex] = linkVars["ParentEndRegionNHits"];
+                    fParentEndRegionNParticles[linkIndex] = linkVars["ParentEndRegionNParticles"];
+                    fParentEndRegionRToWall[linkIndex] = linkVars["ParentEndRegionRToWall"];
+                    // Does/where child connects vars        
+                    fOvershootStartDCA[linkIndex] = linkVars["OvershootStartDCA"];
+                    fOvershootStartL[linkIndex] = linkVars["OvershootStartL"];
+                    fOvershootEndDCA[linkIndex] = linkVars["OvershootEndDCA"];
+                    fOvershootEndL[linkIndex] = linkVars["OvershootEndL"];
+                    fDoesChildConnect[linkIndex] = linkVars["DoesChildConnect"];
+                    fChildConnectionX[linkIndex] = linkVars["ChildConnectionX"];
+                    fChildConnectionY[linkIndex] = linkVars["ChildConnectionY"];
+                    fChildConnectionZ[linkIndex] = linkVars["ChildConnectionZ"];
+                    fChildConnectionDX[linkIndex] = linkVars["ChildConnectionDX"];
+                    fChildConnectionDY[linkIndex] = linkVars["ChildConnectionDY"];
+                    fChildConnectionDZ[linkIndex] = linkVars["ChildConnectionDZ"];
+                    fChildConnectionDCA[linkIndex] = linkVars["ChildConnectionDCA"];
+                    fChildConnectionExtrapDistance[linkIndex] = linkVars["ChildConnectionExtrapDistance"];
+                    fChildConnectionL[linkIndex] = linkVars["ChildConnectionL"];
+                    fChildConnectionLRatio[linkIndex] = linkVars["ChildConnectionLRatio"];
+                    // Splitting parent vars
+                    fParentConnectionPointNUpstreamHits[linkIndex] = linkVars["ParentConnectionNUpstreamHits"];
+                    fParentConnectionPointNDownstreamHits[linkIndex] = linkVars["ParentConnectionNDownstreamHits"];
+                    fParentConnectionPointNHitRatio[linkIndex] = linkVars["ParentConnectionNHitRatio"];
+                    fParentConnectionPointEigenValueRatio[linkIndex] = linkVars["ParentConnectionEigenValueRatio"];
+                    fParentConnectionPointOpeningAngle[linkIndex] = linkVars["ParentConnectionOpeningAngle"];
+                    fIsParentPOIClosestToNu[linkIndex] = linkVars["IsParentPOIClosestToNu"];
+                    fIsChildPOIClosestToNu[linkIndex] = linkVars["IsChildPOIClosestToNu"];
                 }
+            }
+
+            // Now add in the training cut info - this is such a mess sorry
+            for (int i = 0; i < count; i++)
+            {
+                const int thisLinkIndex = linkIndex - i;
+                fTrainingCutL[thisLinkIndex] = trainingCutL;
+                fTrainingCutT[thisLinkIndex] = trainingCutT;
+            }
+
+            // Just check that we are doing all orientations
+            if (((count != 2) && (count != 0)) && (!isChildTrack))
+            {
+                std::cout << "HT SHOWER: NOT ALL ORIENTATIONS COVERED" << std::endl;
+                throw;
+            }
+
+            if (((count != 4) && (count != 0)) && (isChildTrack))
+            {
+                std::cout << "HT TRACK: NOT ALL ORIENTATIONS COVERED" << std::endl;
+                throw;
             }
         }
     }
@@ -2637,68 +2772,6 @@ bool FDSelection::CCNuSelection::IsTrueParentChildLink(const int parentPFPIndex,
 }
 
 //////////////////////////////////////////////////////////////////////////////////
-
-void FDSelection::CCNuSelection::FillRecoParentChildLinkInfo(art::Event const & evt, const art::Ptr<recob::PFParticle> childPFP, 
-    art::Ptr<recob::PFParticle> parentPFP, const int childIndex, const int parentIndex, const bool childUseRecoStart, 
-    const bool parentUseRecoStart, const int linkIndex)
-{
-    std::map<std::string, double> linkVars;
-    HierarchyUtils::GetLinkInfo(evt, parentPFP, childPFP, parentUseRecoStart, childUseRecoStart, fRecoModuleLabel, fTrackModuleLabel, linkVars);
-
-    fChildStartX[linkIndex] = linkVars["ChildStartX"];
-    fChildStartY[linkIndex] = linkVars["ChildStartY"];
-    fChildStartZ[linkIndex] = linkVars["ChildStartZ"];
-    fChildStartDX[linkIndex] = linkVars["ChildStartDX"];
-    fChildStartDY[linkIndex] = linkVars["ChildStartDY"];
-    fChildStartDZ[linkIndex] = linkVars["ChildStartDZ"];
-    fParentEndX[linkIndex] = linkVars["ParentEndX"];
-    fParentEndY[linkIndex] = linkVars["ParentEndY"];
-    fParentEndZ[linkIndex] = linkVars["ParentEndZ"];
-    fParentEndDX[linkIndex] = linkVars["ParentEndDX"];
-    fParentEndDY[linkIndex] = linkVars["ParentEndDY"];
-    fParentEndDZ[linkIndex] = linkVars["ParentEndDZ"];
-    fParentStartX[linkIndex] = linkVars["ParentStartX"];
-    fParentStartY[linkIndex] = linkVars["ParentStartY"];
-    fParentStartZ[linkIndex] = linkVars["ParentStartZ"];
-    fParentStartDX[linkIndex] = linkVars["ParentStartDX"];
-    fParentStartDY[linkIndex] = linkVars["ParentStartDY"];
-    fParentStartDZ[linkIndex] = linkVars["ParentStartDZ"];
-
-    // General vars
-    fParentNuVertexSeparation[linkIndex] = linkVars["ParentNuVertexSeparation"];
-    fChildNuVertexSeparation[linkIndex] = linkVars["ChildNuVertexSeparation"];
-    fParentBraggVariable[linkIndex] = linkVars["ParentBraggVariable"];
-    fOpeningAngle[linkIndex] = linkVars["OpeningAngle"];
-    fVertexSeparation[linkIndex] = linkVars["VertexSeparation"];    
-    // End region vars
-    fParentEndRegionNHits[linkIndex] = linkVars["ParentEndRegionNHits"];
-    fParentEndRegionNParticles[linkIndex] = linkVars["ParentEndRegionNParticles"];
-    fParentEndRegionRToWall[linkIndex] = linkVars["ParentEndRegionRToWall"];
-    // Does/where child connects vars        
-    fOvershootStartDCA[linkIndex] = linkVars["OvershootStartDCA"];
-    fOvershootStartL[linkIndex] = linkVars["OvershootStartL"];
-    fOvershootEndDCA[linkIndex] = linkVars["OvershootEndDCA"];
-    fOvershootEndL[linkIndex] = linkVars["OvershootEndL"];
-    fDoesChildConnect[linkIndex] = linkVars["DoesChildConnect"];
-    fChildConnectionX[linkIndex] = linkVars["ChildConnectionX"];
-    fChildConnectionY[linkIndex] = linkVars["ChildConnectionY"];
-    fChildConnectionZ[linkIndex] = linkVars["ChildConnectionZ"];
-    fChildConnectionDX[linkIndex] = linkVars["ChildConnectionDX"];
-    fChildConnectionDY[linkIndex] = linkVars["ChildConnectionDY"];
-    fChildConnectionDZ[linkIndex] = linkVars["ChildConnectionDZ"];
-    fChildConnectionDCA[linkIndex] = linkVars["ChildConnectionDCA"];
-    fChildConnectionExtrapDistance[linkIndex] = linkVars["ChildConnectionExtrapDistance"];
-    fChildConnectionL[linkIndex] = linkVars["ChildConnectionL"];
-    fChildConnectionLRatio[linkIndex] = linkVars["ChildConnectionLRatio"];
-    // Splitting parent vars
-    fParentConnectionPointNUpstreamHits[linkIndex] = linkVars["ParentConnectionNUpstreamHits"];
-    fParentConnectionPointNDownstreamHits[linkIndex] = linkVars["ParentConnectionNDownstreamHits"];
-    fParentConnectionPointNHitRatio[linkIndex] = linkVars["ParentConnectionNHitRatio"];
-    fParentConnectionPointEigenValueRatio[linkIndex] = linkVars["ParentConnectionEigenValueRatio"];
-    fParentConnectionPointOpeningAngle[linkIndex] = linkVars["ParentConnectionOpeningAngle"];
-}
-
-///////////////////////////////////////////////////////////////
 
 void FDSelection::CCNuSelection::RunTrackSelection(art::Event const & evt)
 {
