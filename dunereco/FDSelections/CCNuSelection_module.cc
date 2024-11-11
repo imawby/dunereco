@@ -118,7 +118,8 @@ private:
   int fSubRun;
   int fEvent;
   // Neutrino 
-  int fNuPdg;        // Interaction PDG
+  int fUnoscNuPdg;   // Interaction PDG
+  int fOscNuPdg;     // Interaction PDG
   int fBeamPdg;      // PDG at point of creation
   int fNuTrackID;
   int fNC;           // 1=is NC, 0=otherwise
@@ -131,6 +132,18 @@ private:
   double fNuX;       // Interaction positions
   double fNuY;
   double fNuZ;
+  //Outgoing Lepton 
+  int fLepPDG;
+  double fLepEnergy;
+  double fMomLepX;
+  double fMomLepY;
+  double fMomLepZ;
+  double fMomLepT;
+  double fLepEndX;
+  double fLepEndY;
+  double fLepEndZ;
+  double fLepEndT;
+  double fLepNuAngle;
   ////////////////////////////////////////
   // Event-level reco
   ////////////////////////////////////////
@@ -297,7 +310,8 @@ void FDSelection::CCNuSelection::beginJob()
     ////////////////////////////
     // True info
     ////////////////////////////
-    fTree->Branch("Nu_True_PDG", &fNuPdg);
+    fTree->Branch("Nu_True_Unosc_PDG", &fUnoscNuPdg);
+    fTree->Branch("Nu_True_Osc_PDG", &fOscNuPdg);
     fTree->Branch("Nu_True_SimID", &fNuTrackID);
     fTree->Branch("Nu_True_IsNC", &fNC);
     fTree->Branch("Nu_True_Mode", &fMode);
@@ -309,6 +323,15 @@ void FDSelection::CCNuSelection::beginJob()
     fTree->Branch("Nu_True_VertexX", &fNuX);
     fTree->Branch("Nu_True_VertexY", &fNuY);
     fTree->Branch("Nu_True_VertexZ", &fNuZ);
+    fTree->Branch("Lep_True_PDG", &fLepPDG);
+    fTree->Branch("Lep_True_Energy", &fLepEnergy);
+    fTree->Branch("Lep_True_MomX", &fMomLepX);
+    fTree->Branch("Lep_True_MomY", &fMomLepY);
+    fTree->Branch("Lep_True_MomZ", &fMomLepZ);
+    fTree->Branch("Lep_True_EndX", &fLepEndX);
+    fTree->Branch("Lep_True_EndY", &fLepEndY);
+    fTree->Branch("Lep_True_EndZ", &fLepEndZ);
+    fTree->Branch("Lep_True_NuAngle", &fLepNuAngle);
     ////////////////////////////
     // Event-level reco info 
     ////////////////////////////
@@ -429,7 +452,8 @@ void FDSelection::CCNuSelection::Reset()
     ////////////////////////////
     // True info
     ////////////////////////////
-    fNuPdg = kDefInt; 
+    fUnoscNuPdg = kDefInt; 
+    fOscNuPdg = kDefInt; 
     fNuTrackID = kDefInt;
     fNC = kDefInt;    
     fMode = kDefInt; 
@@ -441,6 +465,17 @@ void FDSelection::CCNuSelection::Reset()
     fNuX = kDefDoub; 
     fNuY = kDefDoub;
     fNuZ = kDefDoub;
+    fLepPDG = kDefInt;
+    fLepEnergy = kDefDoub;
+    fMomLepX = kDefDoub;
+    fMomLepY = kDefDoub;
+    fMomLepZ = kDefDoub;
+    fMomLepT = kDefDoub;
+    fLepEndX = kDefDoub;
+    fLepEndY = kDefDoub;
+    fLepEndZ = kDefDoub;
+    fLepEndT = kDefDoub;
+    fLepNuAngle = kDefDoub;
     ////////////////////////////
     // Event-level reco info 
     ////////////////////////////
@@ -580,10 +615,20 @@ void FDSelection::CCNuSelection::GetTruthInfo(art::Event const & evt)
     if (mcTruth->Origin() != simb::kBeamNeutrino)
         return;
 
+    // Get the original neutrino flavour (before osc.)
+    art::Handle<std::vector<simb::MCFlux>> mcFluxListHandle;
+    std::vector<art::Ptr<simb::MCFlux>> mcFlux;
+
+    if (evt.getByLabel(fNuGenModuleLabel, mcFluxListHandle))
+        art::fill_ptr_vector(mcFlux, mcFluxListHandle);
+
+    if (mcFluxListHandle.isValid()) 
+        fUnoscNuPdg  = mcFlux[0]->fntype;
+
     // Neutrino
     const simb::MCNeutrino &mcNeutrino = mcTruth->GetNeutrino();
     fNuTrackID = mcNeutrino.Nu().TrackId();
-    fNuPdg = mcNeutrino.Nu().PdgCode();
+    fOscNuPdg = mcNeutrino.Nu().PdgCode();
     fNC = mcNeutrino.CCNC();
     fMode = mcNeutrino.Mode();
     fTargetZ = mcNeutrino.Target()%100000000/10000;
@@ -594,6 +639,20 @@ void FDSelection::CCNuSelection::GetTruthInfo(art::Event const & evt)
     fNuMomX = mcNeutrino.Nu().Momentum().X();
     fNuMomY = mcNeutrino.Nu().Momentum().Y();
     fNuMomZ = mcNeutrino.Nu().Momentum().Z();
+
+    // Leading lepton
+    const simb::MCParticle &mcLepton = mcNeutrino.Lepton();
+    fLepPDG = mcLepton.PdgCode();
+    fLepEnergy = mcLepton.E();
+    fMomLepX = mcLepton.Momentum().X();
+    fMomLepY = mcLepton.Momentum().Y();
+    fMomLepZ = mcLepton.Momentum().Z();
+    fMomLepT = mcLepton.Momentum().T();
+    fLepEndX = mcLepton.EndPosition().X();
+    fLepEndY = mcLepton.EndPosition().Y();
+    fLepEndZ = mcLepton.EndPosition().Z();
+    fLepEndY = mcLepton.EndPosition().T();
+    fLepNuAngle = mcNeutrino.Nu().Momentum().Vect().Angle(mcLepton.Momentum().Vect());
 
     // Fill MCParticle vectors
     for (auto &entry : fMCParticleMap)
