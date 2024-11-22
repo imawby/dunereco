@@ -1795,9 +1795,9 @@ void FDSelection::CCNuSelection::FillPFParticleInfo(art::Event const & evt)
                 fRecoPFPTrueMomX[pfpIndex] = matched_mcparticle->Momentum().X();
                 fRecoPFPTrueMomY[pfpIndex] = matched_mcparticle->Momentum().Y();
                 fRecoPFPTrueMomZ[pfpIndex] = matched_mcparticle->Momentum().Z();
-                fRecoPFPTrueStartX[pfpIndex] = fRecoPFPTruePDG[pfpIndex] == 22 ? matched_mcparticle->EndPosition().X() : matched_mcparticle->Position(0).X();
-                fRecoPFPTrueStartY[pfpIndex] = fRecoPFPTruePDG[pfpIndex] == 22 ? matched_mcparticle->EndPosition().Y() : matched_mcparticle->Position(0).Y();
-                fRecoPFPTrueStartZ[pfpIndex] = fRecoPFPTruePDG[pfpIndex] == 22 ? matched_mcparticle->EndPosition().Z() : matched_mcparticle->Position(0).Z();
+                fRecoPFPTrueStartX[pfpIndex] = fRecoPFPTruePDG[pfpIndex] == matched_mcparticle->Position(0).X();
+                fRecoPFPTrueStartY[pfpIndex] = fRecoPFPTruePDG[pfpIndex] == matched_mcparticle->Position(0).Y();
+                fRecoPFPTrueStartZ[pfpIndex] = fRecoPFPTruePDG[pfpIndex] == matched_mcparticle->Position(0).Z();
                 fRecoPFPTrueEndX[pfpIndex] = matched_mcparticle->EndPosition().X();
                 fRecoPFPTrueEndY[pfpIndex] = matched_mcparticle->EndPosition().Y();
                 fRecoPFPTrueEndZ[pfpIndex] = matched_mcparticle->EndPosition().Z();
@@ -2600,8 +2600,6 @@ void FDSelection::CCNuSelection::FillParentChildLinkInfo(art::Event const & evt)
             const int trackShowerLinkType =  HierarchyUtils::GetTrackShowerLinkType(evt, parentPFP, childPFP, fRecoModuleLabel);
 
             int count = 0;
-            double trainingCutL = -999.0;
-            double trainingCutT = -999.0;
 
             // Go through all possible orientations
             for (bool parentUseRecoStart : {true, false})
@@ -2629,8 +2627,12 @@ void FDSelection::CCNuSelection::FillParentChildLinkInfo(art::Event const & evt)
                     fIsLinkOrientationCorrect[linkIndex] = FDSelection::CCNuSelection::IsLinkOrientationCorrect(parentPFPIndex, childPFPIndex, parentUseRecoStart, childUseRecoStart);
 
                     // Training cuts
-                    if (fIsLinkOrientationCorrect[linkIndex])
-                        HierarchyUtils::CalculateTrainingCuts(linkVars, 1.0, trainingCutL, trainingCutT);
+                    //if (fIsLinkOrientationCorrect[linkIndex])
+                    double trainingCutL = -999.0;
+                    double trainingCutT = -999.0;
+                    HierarchyUtils::CalculateTrainingCuts(linkVars, 1.0, trainingCutL, trainingCutT);
+                    fTrainingCutL[linkIndex] = trainingCutL;
+                    fTrainingCutT[linkIndex] = trainingCutT;
 
                     // Reco
                     fParentPFPIndex[linkIndex] = parentPFPIndex;
@@ -2705,12 +2707,12 @@ void FDSelection::CCNuSelection::FillParentChildLinkInfo(art::Event const & evt)
             }
 
             // Now add in the training cut info - this is such a mess sorry
-            for (int i = 0; i < count; i++)
-            {
-                const int thisLinkIndex = linkIndex - i;
-                fTrainingCutL[thisLinkIndex] = trainingCutL;
-                fTrainingCutT[thisLinkIndex] = trainingCutT;
-            }
+            // for (int i = 0; i < count; i++)
+            // {
+            //     const int thisLinkIndex = linkIndex - i;
+            //     fTrainingCutL[thisLinkIndex] = trainingCutL;
+            //     fTrainingCutT[thisLinkIndex] = trainingCutT;
+            // }
 
             // Just check that we are doing all orientations
             if (((count != 2) && (count != 0)) && (!isChildTrack))
