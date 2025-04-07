@@ -21,6 +21,8 @@
 #include "nusimdata/SimulationBase/MCParticle.h"
 #include "nusimdata/SimulationBase/MCTruth.h"
 #include "lardataobj/RecoBase/Hit.h"
+#include "lardataobj/RecoBase/SpacePoint.h"
+#include "lardataobj/RecoBase/PFParticle.h"
 #include "larsim/Utils/TruthMatchUtils.h"
 
 // c++
@@ -62,6 +64,9 @@ namespace IvysaurusUtils
     float IntegrateGaussian(const float limitA, const float limitB, const float mean, const float std, const float stepSize);
 
     float TrapeziumRule(const float lowerLimit, const float upperLimit, const float mean, const float std);
+
+    bool GetInitialDirection(const art::Event &evt, const TVector3 &pfpVertex, const std::vector<art::Ptr<recob::SpacePoint>> &spacepoints, 
+        const std::string &recoModuleLabel, TVector3 &direction);
 }
 
 #endif

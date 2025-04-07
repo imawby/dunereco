@@ -198,6 +198,7 @@ IvysaurusTrainingFiles::~IvysaurusTrainingFiles()
 
 void IvysaurusTrainingFiles::analyze(const art::Event &evt)
 {
+    art::ServiceHandle<cheat::ParticleInventoryService> piServ;
     const std::vector<art::Ptr<recob::PFParticle>> pfparticles = dune_ana::DUNEAnaEventUtils::GetPFParticles(evt, m_recoModuleLabel);
 
     // Get the neutrino PFP
@@ -214,22 +215,10 @@ void IvysaurusTrainingFiles::analyze(const art::Event &evt)
 
     const std::vector<art::Ptr<recob::PFParticle>> &nuChildPFPs = dune_ana::DUNEAnaPFParticleUtils::GetChildParticles(nuPFP, evt, m_recoModuleLabel);
 
-    for (const art::Ptr<recob::PFParticle> &pfparticle : pfparticles)
+    std::cout << "N PFPs: " << nuChildPFPs.size() << std::endl;
+
+    for (const art::Ptr<recob::PFParticle> &pfparticle : nuChildPFPs)
     {
-        bool isPrimary = false;
-
-        for (const art::Ptr<recob::PFParticle> &nuChildPFP : nuChildPFPs)
-        {
-            if (nuChildPFP->Self() == pfparticle->Self())
-            {
-                isPrimary = true;
-                break;
-            }
-        }
-
-        if (!isPrimary)
-            continue;
-
         Reset();
 
         m_run = evt.run();
@@ -247,21 +236,31 @@ void IvysaurusTrainingFiles::analyze(const art::Event &evt)
 
         if (TruthMatchUtils::Valid(g4id))
         {
-            art::ServiceHandle<cheat::ParticleInventoryService> piServ;
+            // If it isn't a PDG that we care about, move on...
+            m_truePDG = piServ->ParticleList().at(g4id)->PdgCode();
+            const int absPDG = std::abs(m_truePDG);
+
+            std::cout << "absPDG: " << absPDG << std::endl;
+
+            if ((absPDG != 13) && (absPDG != 2212) && (absPDG != 211) && (absPDG != 11) && (absPDG != 22))
+                continue;
+
             m_completeness = IvysaurusUtils::CompletenessFromTrueParticleID(clockData, pfpHits, eventHitList, g4id);
             m_purity = IvysaurusUtils::HitPurityFromTrueParticleID(clockData, pfpHits, g4id);
-            m_truePDG = piServ->ParticleList().at(g4id)->PdgCode();
         }
         else
         {
             continue;
         }
 
-        // If it isn't a PDG that we care about, move on...
-        int absPDG = std::abs(m_truePDG);
-
-        if ((absPDG != 13) && (absPDG != 2212) && (absPDG != 211) && (absPDG != 11) && (absPDG != 22))
+        ////////////////////////////////////////////                                                                                                                                                                                    
+        // Apply truth quality cuts
+        ////////////////////////////////////////////  
+        if ((m_completeness < m_completenessThreshold) || (m_purity < m_purityThreshold))
+        {
+            std::cout << "completeness/purity" << std::endl;
             continue;
+        }
 
         ////////////////////////////////////////////                                                                                                                                                                                    
         // Now, get the track score... 
@@ -277,8 +276,11 @@ void IvysaurusTrainingFiles::analyze(const art::Event &evt)
         ////////////////////////////////////////////  
         const std::vector<art::Ptr<recob::SpacePoint>> spacepoints = dune_ana::DUNEAnaPFParticleUtils::GetSpacePoints(pfparticle, evt, m_recoModuleLabel);
 
-        if (spacepoints.empty())
+        if (spacepoints.empty() || (spacepoints.size() < m_nSpacepointThreshold))
+        {
+            std::cout << "spacepoints" << std::endl;
             continue;
+        }
 
         for (art::Ptr<recob::SpacePoint> spacepoint : spacepoints)
             m_spacePoints.push_back({spacepoint->XYZ()[0], spacepoint->XYZ()[1], spacepoint->XYZ()[2]});
@@ -286,20 +288,9 @@ void IvysaurusTrainingFiles::analyze(const art::Event &evt)
         m_nSpacePoints = spacepoints.size();
         m_nHits2D = pfpHits.size();
 
-        ////////////////////////////////////////////                                                                                                                                                                                    
-        // Now, apply quality cuts
-        ////////////////////////////////////////////  
-
-        //std::cout << "m_completeness: " << m_completeness << std::endl;
-        //std::cout << "m_purity: " << m_purity << std::endl;
-
-        if ((m_completeness < m_completenessThreshold) || (m_purity < m_purityThreshold) || (spacepoints.size() < m_nSpacepointThreshold))
-            continue;
-
         ////////////////////////////////////////////
         // Now, into 2D
         ////////////////////////////////////////////  
-
         int nInitialisedGrids(0);
 
         for (IvysaurusUtils::PandoraView pandoraView : {IvysaurusUtils::PandoraView::TPC_VIEW_U, IvysaurusUtils::PandoraView::TPC_VIEW_V, IvysaurusUtils::PandoraView::TPC_VIEW_W})
@@ -354,11 +345,11 @@ void IvysaurusTrainingFiles::analyze(const art::Event &evt)
             m_gridManager.FillViewGrid(evt, pfparticle, startGrid);
             m_gridManager.FillViewGrid(evt, pfparticle, endGrid);
 
-            // DisplacementGrid
-            const art::Ptr<recob::Vertex> nuVertex3D = dune_ana::DUNEAnaPFParticleUtils::GetVertex(nuPFP, evt, m_recoModuleLabel);
-            const TVector3 nuVertex3D_tv = TVector3(nuVertex3D->position().X(), nuVertex3D->position().Y(), nuVertex3D->position().Z());
-            GridManager::Grid startGrid_disp = m_gridManager.ObtainViewDisplacementGrid(evt, nuVertex3D_tv, startGrid);
-            GridManager::Grid endGrid_disp = m_gridManager.ObtainViewDisplacementGrid(evt, nuVertex3D_tv, endGrid);
+            // // DisplacementGrid
+            // const art::Ptr<recob::Vertex> nuVertex3D = dune_ana::DUNEAnaPFParticleUtils::GetVertex(nuPFP, evt, m_recoModuleLabel);
+            // const TVector3 nuVertex3D_tv = TVector3(nuVertex3D->position().X(), nuVertex3D->position().Y(), nuVertex3D->position().Z());
+            // GridManager::Grid startGrid_disp = m_gridManager.ObtainViewDisplacementGrid(evt, nuVertex3D_tv, startGrid);
+            // GridManager::Grid endGrid_disp = m_gridManager.ObtainViewDisplacementGrid(evt, nuVertex3D_tv, endGrid);
 
             std::vector<float> &startDriftBoundaries = pandoraView == IvysaurusUtils::PandoraView::TPC_VIEW_U ? m_startDriftBoundariesU :
                 pandoraView == IvysaurusUtils::PandoraView::TPC_VIEW_V ? m_startDriftBoundariesV : m_startDriftBoundariesW;
@@ -378,11 +369,11 @@ void IvysaurusTrainingFiles::analyze(const art::Event &evt)
             std::vector<std::vector<float>> &endGridValues = pandoraView == IvysaurusUtils::PandoraView::TPC_VIEW_U ? m_endGridValuesU : 
                 pandoraView == IvysaurusUtils::PandoraView::TPC_VIEW_V ? m_endGridValuesV : m_endGridValuesW;
 
-            std::vector<std::vector<float>> &startGridValues_disp = pandoraView == IvysaurusUtils::PandoraView::TPC_VIEW_U ? m_startGridValuesU_disp : 
-                pandoraView == IvysaurusUtils::PandoraView::TPC_VIEW_V ? m_startGridValuesV_disp : m_startGridValuesW_disp;
+            // std::vector<std::vector<float>> &startGridValues_disp = pandoraView == IvysaurusUtils::PandoraView::TPC_VIEW_U ? m_startGridValuesU_disp : 
+            //     pandoraView == IvysaurusUtils::PandoraView::TPC_VIEW_V ? m_startGridValuesV_disp : m_startGridValuesW_disp;
 
-            std::vector<std::vector<float>> &endGridValues_disp = pandoraView == IvysaurusUtils::PandoraView::TPC_VIEW_U ? m_endGridValuesU_disp : 
-                pandoraView == IvysaurusUtils::PandoraView::TPC_VIEW_V ? m_endGridValuesV_disp : m_endGridValuesW_disp;
+            // std::vector<std::vector<float>> &endGridValues_disp = pandoraView == IvysaurusUtils::PandoraView::TPC_VIEW_U ? m_endGridValuesU_disp : 
+            //     pandoraView == IvysaurusUtils::PandoraView::TPC_VIEW_V ? m_endGridValuesV_disp : m_endGridValuesW_disp;
 
             startDriftBoundaries = startGrid.GetDriftBoundaries();
             endDriftBoundaries = endGrid.GetDriftBoundaries();
@@ -390,12 +381,15 @@ void IvysaurusTrainingFiles::analyze(const art::Event &evt)
             endWireBoundaries = endGrid.GetWireBoundaries();
             startGridValues = startGrid.GetGridValues();
             endGridValues = endGrid.GetGridValues();
-            startGridValues_disp = startGrid_disp.GetGridValues();
-            endGridValues_disp = endGrid_disp.GetGridValues();
+            // startGridValues_disp = startGrid_disp.GetGridValues();
+            // endGridValues_disp = endGrid_disp.GetGridValues();
         }
 
         if (nInitialisedGrids != 3)
+        {
+            std::cout << "n grids" << std::endl;
             continue;
+        }
 
         ////////////////////////////////////////////                                                                                                                                                                                    
         // Just leave this here a minute

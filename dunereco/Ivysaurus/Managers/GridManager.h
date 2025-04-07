@@ -17,6 +17,7 @@
 #include "canvas/Persistency/Common/FindManyP.h"
 
 #include "lardataobj/RecoBase/Hit.h"
+#include "lardataobj/RecoBase/SpacePoint.h"
 #include "lardataobj/RecoBase/PFParticle.h"
 
 #include "dunereco/Ivysaurus/Utils/IvysaurusUtils.h"
@@ -66,10 +67,15 @@ class GridManager
       bool m_isNormalised;
   };
 
+    typedef std::map<IvysaurusUtils::PandoraView, Grid> GridMap;
+
     GridManager(const fhicl::ParameterSet& pset);
     ~GridManager();
 
     // Function to place the grid in space
+    GridMap ObtainGridMap(const art::Event &evt, const art::Ptr<recob::PFParticle> &pfparticle, 
+        const bool isStart) const;
+
     Grid ObtainViewGrid(const art::Event &evt, const art::Ptr<recob::PFParticle> &pfparticle, 
         const IvysaurusUtils::PandoraView pandoraView, const bool isStart) const;
 
@@ -81,8 +87,11 @@ class GridManager
     Grid ObtainViewDisplacementGrid(const art::Event &evt, const TVector3 &nuVertex3D, const GridManager::Grid &caloGrid) const;
 
   private:
-    bool GetStartExtremalPoints(const art::Event &evt, const art::Ptr<recob::PFParticle> &pfparticle, 
-        TVector3 &position1, TVector3 &position2) const;
+    void GetSpacepointsToConsider(const art::Event &evt, const art::Ptr<recob::PFParticle> &pfparticle, 
+        std::vector<art::Ptr<recob::SpacePoint>> &spToConsider) const;
+
+    bool GetStartExtremalPoints(const art::Event &evt, const std::vector<art::Ptr<recob::SpacePoint>> &spacepointsToConsider,
+        const art::Ptr<recob::PFParticle> &pfparticle, TVector3 &position1, TVector3 &position2) const;
 
     bool GetStartExtremalPointsTrack(const art::Event &evt, const art::Ptr<recob::PFParticle> &pfparticle, 
         TVector3 &position1, TVector3 &position2) const;

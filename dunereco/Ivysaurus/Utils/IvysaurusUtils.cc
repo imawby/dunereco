@@ -6,6 +6,13 @@
 #include "lardata/DetectorInfoServices/DetectorPropertiesService.h"
 
 #include "lardataobj/RecoBase/Hit.h"
+#include "lardataobj/RecoBase/PFParticle.h"
+#include "lardataobj/RecoBase/SpacePoint.h"
+#include "lardataobj/RecoBase/Vertex.h"
+
+#include "dunereco/AnaUtils/DUNEAnaHitUtils.h"
+#include "dunereco/AnaUtils/DUNEAnaPFParticleUtils.h"
+#include "dunereco/AnaUtils/DUNEAnaSpacePointUtils.h"
 
 #include "larpandora/LArPandoraInterface/LArPandoraGeometry.h"
 
@@ -191,6 +198,95 @@ float TrapeziumRule(const float lowerLimit, const float upperLimit, const float 
 
     return (upperLimit - lowerLimit) * (0.5f * (lowerEval + upperEval));
 }
+
+/////////////////////////////////////////////////////////////
+
+bool GetInitialDirection(const art::Event &evt, const TVector3 &pfpVertex, const std::vector<art::Ptr<recob::SpacePoint>> &spacepoints, 
+    const std::string &recoModuleLabel, TVector3 &direction)
+{
+    auto const clockData = art::ServiceHandle<detinfo::DetectorClocksService>()->DataFor(evt);
+    auto const detProp = art::ServiceHandle<detinfo::DetectorPropertiesService const>()->DataFor(evt);
+
+    int nBins = 180;
+    float angleMin = 0.f, angleMax = 2.f * M_PI;
+    float binWidth = (angleMax - angleMin) / static_cast<float>(nBins);
+
+    std::vector<std::vector<int>> spatialDist(nBins, std::vector<int>(nBins, 0));
+    std::vector<std::vector<float>> energyDist(nBins, std::vector<float>(nBins, 0.f));
+
+    // theta0YZ then theta0XZ
+    // measure from Y to Z, and Z to X? fool.
+    int highestSP = 0;
+    float highestEnergy = 0.f;
+    int bestTheta0YZBin = -1;
+    int bestTheta0XZBin = -1; 
+
+    for (const art::Ptr<recob::SpacePoint> &spacepoint : spacepoints)
+    {
+        // Make sure we have an associated 2D hit
+        const std::vector<art::Ptr<recob::Hit>> assocHits = dune_ana::DUNEAnaSpacePointUtils::GetHits(spacepoint, evt, recoModuleLabel);
+
+        if (assocHits.empty())
+            continue;
+
+        const TVector3 spacepointPos = TVector3(spacepoint->position().X(), spacepoint->position().Y(), spacepoint->position().Z());
+        const TVector3 displacement = spacepointPos - pfpVertex;
+        const float mag = sqrt((displacement.X() * displacement.X()) + (displacement.Y() * displacement.Y()) + (displacement.Z() * displacement.Z()));
+        const float magXZ = sqrt((displacement.X() * displacement.X()) + (displacement.Z() * displacement.Z()));
+
+        float theta0YZ = (mag < std::numeric_limits<float>::epsilon()) ? 0.f : 
+            (std::fabs(std::fabs(displacement.Y() / mag) - 1.f) < std::numeric_limits<float>::epsilon()) ? 0.f : 
+            std::acos(displacement.Y() / mag);
+
+        float theta0XZ = (magXZ < std::numeric_limits<float>::epsilon()) ? 0.f : 
+            (std::fabs(std::fabs(displacement.Z() / magXZ) - 1.f) < std::numeric_limits<float>::epsilon()) ? 0.f :
+            std::acos(displacement.Z() / magXZ);
+
+        // try do signed-ness
+        if (displacement.Z() < 0.f)
+            theta0YZ += M_PI;
+
+        if (displacement.X() < 0.f)
+            theta0XZ += M_PI;
+
+        const int bin0YZ = std::floor(theta0YZ / binWidth);
+        const int bin0XZ = std::floor(theta0XZ / binWidth);
+
+        spatialDist[bin0YZ][bin0XZ] += 1;
+        energyDist[bin0YZ][bin0XZ] = dune_ana::DUNEAnaHitUtils::LifetimeCorrectedTotalHitCharge(clockData, detProp, {assocHits.front()});
+
+        if (((spatialDist[bin0YZ][bin0XZ] == highestSP) && (energyDist[bin0YZ][bin0XZ] > highestEnergy)) ||
+            (spatialDist[bin0YZ][bin0XZ] > highestSP))
+        {
+                highestSP = spatialDist[bin0YZ][bin0XZ];
+                highestEnergy = energyDist[bin0YZ][bin0XZ];
+                bestTheta0YZBin = bin0YZ;
+                bestTheta0XZBin = bin0XZ;
+        }
+    }
+
+    if ((bestTheta0YZBin < 0) || (bestTheta0XZBin < 0))
+        return false;
+
+    const float bestTheta0YZ = angleMin + ((static_cast<float>(bestTheta0YZBin) + 0.5f) * binWidth);
+    const float bestTheta0XZ = angleMin + ((static_cast<float>(bestTheta0XZBin) + 0.5f) * binWidth);
+
+    direction = TVector3(std::fabs(std::sin(bestTheta0YZ) * std::sin(bestTheta0XZ)), std::fabs(std::cos(bestTheta0YZ)), 
+                         std::fabs(std::sin(bestTheta0YZ) * std::cos(bestTheta0XZ)));
+
+    if (bestTheta0XZ > M_PI)
+        direction.SetX(direction.X() * -1.f);
+
+    if (bestTheta0YZ > M_PI)
+        direction.SetZ(direction.Z() * -1.f);
+
+    if ((bestTheta0YZ > (M_PI / 2.f)) && (bestTheta0YZ < (M_PI * 3.f / 2.f)))
+        direction.SetY(direction.Y() * -1.f);
+
+    return true;
+}
+
+/////////////////////////////////////////////////////////////
 
 }
 

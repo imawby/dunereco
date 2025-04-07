@@ -216,12 +216,19 @@ GridManager::~GridManager()
 {
 }
 
+
 /////////////////////////////////////////////////////////////
 
-GridManager::Grid GridManager::ObtainViewGrid(const art::Event &evt, const art::Ptr<recob::PFParticle> &pfparticle, 
-    const IvysaurusUtils::PandoraView pandoraView, const bool isStart) const
+GridManager::GridMap GridManager::ObtainGridMap(const art::Event &evt, const art::Ptr<recob::PFParticle> &pfparticle, const bool isStart) const
 {
-    const float trackScore = (pfparticle->PdgCode() == 13) ? 1.0 : 0.0;
+    GridManager::GridMap gridMap;
+
+    // First consider only pfp hits near vertex (then we will add in children)
+    std::vector<art::Ptr<recob::SpacePoint>> spacepointsToConsider;
+    GetSpacepointsToConsider(evt, pfparticle, spacepointsToConsider);
+
+    if (spacepointsToConsider.empty())
+        return gridMap;
 
     // Find the extremal diagonal.. 
     TVector3 position1 = TVector3(0.f, 0.f, 0.f);
@@ -229,14 +236,71 @@ GridManager::Grid GridManager::ObtainViewGrid(const art::Event &evt, const art::
 
     if (isStart)
     {
-        if (!GetStartExtremalPoints(evt, pfparticle, position1, position2))
+        if (!GetStartExtremalPoints(evt, spacepointsToConsider, pfparticle, position1, position2))
+            return gridMap;
+    }
+    else
+    {
+        if (pfparticle->PdgCode() == 13)
+        {
+            if (!GetEndExtremalPointsTrack(evt, pfparticle, position1, position2))
+                if (!GetEndExtremalPointsShower(evt, pfparticle, position1, position2))
+                    return gridMap;
+        }
+        else
+        {
+            if (!GetEndExtremalPointsShower(evt, pfparticle, position1, position2))
+                if (!GetEndExtremalPointsTrack(evt, pfparticle, position1, position2))
+                    return gridMap;
+        }
+    }
+
+    // Now need to project these things into each 'Pandora view'
+    for (IvysaurusUtils::PandoraView pandoraView : {IvysaurusUtils::PandoraView::TPC_VIEW_U, 
+         IvysaurusUtils::PandoraView::TPC_VIEW_V, IvysaurusUtils::PandoraView::TPC_VIEW_W})
+    {
+
+        const TVector3 projectedPosition1 = ProjectIntoPandoraView(position1, pandoraView);
+        const TVector3 projectedPosition2 = ProjectIntoPandoraView(position2, pandoraView);
+        const float driftSpan = projectedPosition2.X() - projectedPosition1.X();
+        const float wireSpan = projectedPosition2.Z() - projectedPosition1.Z();
+
+        gridMap.insert(std::make_pair(pandoraView, Grid(projectedPosition1, driftSpan, wireSpan, 
+            m_dimensions, m_maxGridEntry, m_nSigmaConsidered, m_integralStep, pandoraView, true)));
+
+        // Populate grid (reduce hits considered) 
+        FindHitsInGrid(evt, pfparticle, gridMap.at(pandoraView));
+    }
+
+    return gridMap;
+}
+
+/////////////////////////////////////////////////////////////
+
+GridManager::Grid GridManager::ObtainViewGrid(const art::Event &evt, const art::Ptr<recob::PFParticle> &pfparticle, 
+    const IvysaurusUtils::PandoraView pandoraView, const bool isStart) const
+{
+    // First consider only pfp hits near vertex (then we will add in children)
+    std::vector<art::Ptr<recob::SpacePoint>> spacepointsToConsider;
+    GetSpacepointsToConsider(evt, pfparticle, spacepointsToConsider);
+
+    if (spacepointsToConsider.empty())
+        return Grid(TVector3(0.f, 0.f, 0.f), 0.f, 0.f, 0, m_maxGridEntry, m_nSigmaConsidered, m_integralStep, pandoraView, false);
+
+    // Find the extremal diagonal.. 
+    TVector3 position1 = TVector3(0.f, 0.f, 0.f);
+    TVector3 position2 = TVector3(0.f, 0.f, 0.f); // Along the particle direction from position1
+
+    if (isStart)
+    {
+        if (!GetStartExtremalPoints(evt, spacepointsToConsider, pfparticle, position1, position2))
         {
             return Grid(TVector3(0.f, 0.f, 0.f), 0.f, 0.f, 0, m_maxGridEntry, m_nSigmaConsidered, m_integralStep, pandoraView, false);
         }
     }
     else
     {
-        if (trackScore > 0.5f)
+        if (pfparticle->PdgCode() == 13)
         {
             if (!GetEndExtremalPointsTrack(evt, pfparticle, position1, position2))
             {
@@ -273,140 +337,48 @@ GridManager::Grid GridManager::ObtainViewGrid(const art::Event &evt, const art::
 
 /////////////////////////////////////////////////////////////
 
-bool GridManager::GetStartExtremalPoints(const art::Event &evt, const art::Ptr<recob::PFParticle> &pfparticle, 
-    TVector3 &position1, TVector3 &position2) const
+void GridManager::GetSpacepointsToConsider(const art::Event &evt, const art::Ptr<recob::PFParticle> &pfparticle, 
+    std::vector<art::Ptr<recob::SpacePoint>> &spToConsider) const
 {
-    ////////////////////
-    // Get the neutrino vertex
-    art::Ptr<recob::PFParticle> nuPFP;
-
-    try
-    {
-        nuPFP = dune_ana::DUNEAnaEventUtils::GetNeutrino(evt, m_recoModuleLabel);
-    }
-    catch (...)
-    {
-        std::cout << "no neutrino vertex..." << std::endl;
-        return false;
-    }
-
-    const art::Ptr<recob::Vertex> nuVertex3D = dune_ana::DUNEAnaPFParticleUtils::GetVertex(nuPFP, evt, m_recoModuleLabel);
-    const TVector3 nuVertex3D_tv = TVector3(nuVertex3D->position().X(), nuVertex3D->position().Y(), nuVertex3D->position().Z());
-    /////////////////////////////
-
     const std::vector<art::Ptr<recob::SpacePoint>> spacepoints = dune_ana::DUNEAnaPFParticleUtils::GetSpacePoints(pfparticle, evt, m_recoModuleLabel); 
 
     if (spacepoints.empty())
+        return;
+
+    const art::Ptr<recob::Vertex> vertex = dune_ana::DUNEAnaPFParticleUtils::GetVertex(pfparticle, evt, m_recoModuleLabel);
+    const TVector3 vertexPos = TVector3(vertex->position().X(), vertex->position().Y(), vertex->position().Z());
+
+    // Get all spacepoints
+    for (const art::Ptr<recob::SpacePoint> &spacepoint : spacepoints)
     {
-        std::cout << "spacepoints empty" << std::endl;
+        const TVector3 spacepointPos = TVector3(spacepoint->position().X(), spacepoint->position().Y(), spacepoint->position().Z());
+        const TVector3 displacement = spacepointPos - vertexPos;
+        const float magSq = (displacement.X() * displacement.X()) + (displacement.Y() * displacement.Y()) + (displacement.Z() * displacement.Z());
+
+        if (magSq > (m_gridSize3D * m_gridSize3D))
+            continue;
+
+        spToConsider.push_back(spacepoint);
+    }
+}
+
+
+/////////////////////////////////////////////////////////////
+
+bool GridManager::GetStartExtremalPoints(const art::Event &evt, const std::vector<art::Ptr<recob::SpacePoint>> &spacepointsToConsider, 
+    const art::Ptr<recob::PFParticle> &pfparticle, TVector3 &position1, TVector3 &position2) const
+{
+    TVector3 initialDir3D(0.f, 0.f, 0.f);
+
+    const art::Ptr<recob::Vertex> vertex = dune_ana::DUNEAnaPFParticleUtils::GetVertex(pfparticle, evt, m_recoModuleLabel);
+    const TVector3 vertexPos = TVector3(vertex->position().X(), vertex->position().Y(), vertex->position().Z());
+
+    if (!IvysaurusUtils::GetInitialDirection(evt, vertexPos, spacepointsToConsider, m_recoModuleLabel, initialDir3D))
         return false;
-    }
 
-    try
-    {
-        const art::Ptr<recob::Vertex> vertex = dune_ana::DUNEAnaPFParticleUtils::GetVertex(pfparticle, evt, m_recoModuleLabel);
-
-        const TVector3 vertexPos = TVector3(vertex->position().X(), vertex->position().Y(), vertex->position().Z());
-        //const float vertexL = (vertexPos - nuVertex3D_tv).Mag();
-
-        int nBins = 180;
-        float angleMin = 0.f, angleMax = 2.f * M_PI;
-        float binWidth = (angleMax - angleMin) / static_cast<float>(nBins);
-
-        std::vector<std::vector<int>> spatialDist(nBins, std::vector<int>(nBins, 0));
-        std::vector<std::vector<float>> energyDist(nBins, std::vector<float>(nBins, 0.f));
-
-        // theta0YZ then theta0XZ
-        // measure from Y to Z, and Z to X? fool.
-        int highestSP = 0;
-        float highestEnergy = 0.f;
-        int bestTheta0YZBin = -1;
-        int bestTheta0XZBin = -1; 
-
-        for (const art::Ptr<recob::SpacePoint> &spacepoint : spacepoints)
-        {
-            const TVector3 spacepointPos = TVector3(spacepoint->position().X(), spacepoint->position().Y(), spacepoint->position().Z());
-            const TVector3 displacement = spacepointPos - vertexPos;
-            const float mag = sqrt((displacement.X() * displacement.X()) + (displacement.Y() * displacement.Y()) + (displacement.Z() * displacement.Z()));
-
-            if (mag > m_gridSize3D)
-                continue;
-
-            /*
-            const float spacepointL = (vertexPos - nuVertex3D_tv).Dot(spacepointPos - nuVertex3D_tv);
-
-            // ignore hits that are between the pfp vertex and spacepoint?
-            if (spacepointL < vertexL)
-                continue;
-            */
-            const float magXZ = sqrt((displacement.X() * displacement.X()) + (displacement.Z() * displacement.Z()));
-
-            float theta0YZ = (mag < std::numeric_limits<float>::epsilon()) ? 0.f : 
-                (std::fabs(std::fabs(displacement.Y() / mag) - 1.f) < std::numeric_limits<float>::epsilon()) ? 0.f : 
-                std::acos(displacement.Y() / mag);
-
-            float theta0XZ = (magXZ < std::numeric_limits<float>::epsilon()) ? 0.f : 
-                (std::fabs(std::fabs(displacement.Z() / magXZ) - 1.f) < std::numeric_limits<float>::epsilon()) ? 0.f :
-                std::acos(displacement.Z() / magXZ);
-
-            // try do signed-ness
-            if (displacement.Z() < 0.f)
-                theta0YZ += M_PI;
-
-            if (displacement.X() < 0.f)
-                theta0XZ += M_PI;
-
-            const int bin0YZ = std::floor(theta0YZ / binWidth);
-            const int bin0XZ = std::floor(theta0XZ / binWidth);
-
-            const std::vector<art::Ptr<recob::Hit>> assocHits = dune_ana::DUNEAnaSpacePointUtils::GetHits(spacepoint, evt, m_recoModuleLabel);
-
-            if (assocHits.empty())
-                continue;
-
-            spatialDist[bin0YZ][bin0XZ] += 1;
-            energyDist[bin0YZ][bin0XZ] += ObtainHitEnergy(evt, assocHits.front());
-
-            if (((spatialDist[bin0YZ][bin0XZ] == highestSP) && (energyDist[bin0YZ][bin0XZ] > highestEnergy)) ||
-                (spatialDist[bin0YZ][bin0XZ] > highestSP))
-            {
-                highestSP = spatialDist[bin0YZ][bin0XZ];
-                highestEnergy = energyDist[bin0YZ][bin0XZ];
-                bestTheta0YZBin = bin0YZ;
-                bestTheta0XZBin = bin0XZ;
-            }
-        }
-
-        if ((bestTheta0YZBin < 0) || (bestTheta0XZBin < 0))
-        {
-            std::cout << "bin issue" << std::endl;
-            return false;
-        }
-
-        const float bestTheta0YZ = angleMin + ((static_cast<float>(bestTheta0YZBin) + 0.5f) * binWidth);
-        const float bestTheta0XZ = angleMin + ((static_cast<float>(bestTheta0XZBin) + 0.5f) * binWidth);
-
-        TVector3 direction = TVector3(std::fabs(std::sin(bestTheta0YZ) * std::sin(bestTheta0XZ)), std::fabs(std::cos(bestTheta0YZ)), 
-                                      std::fabs(std::sin(bestTheta0YZ) * std::cos(bestTheta0XZ)));
-
-        if (bestTheta0XZ > M_PI)
-            direction.SetX(direction.X() * -1.f);
-
-        if (bestTheta0YZ > M_PI)
-            direction.SetZ(direction.Z() * -1.f);
-
-        if ((bestTheta0YZ > (M_PI / 2.f)) && (bestTheta0YZ < (M_PI * 3.f / 2.f)))
-            direction.SetY(direction.Y() * -1.f);
-
-        position1 = TVector3(vertex->position().X(), vertex->position().Y(), vertex->position().Z());
-        const float diagonalLength = sqrt(2.0 * (m_gridSize3D * m_gridSize3D));
-        position2 = position1 + (direction * diagonalLength);
-    }
-    catch (...)
-    {
-        std::cout << "spacePoints.size(): " << spacepoints.size() << std::endl;
-        return false;
-    }
+    position1 = TVector3(vertex->position().X(), vertex->position().Y(), vertex->position().Z());
+    const float diagonalLength = sqrt(2.0 * (m_gridSize3D * m_gridSize3D));
+    position2 = position1 + (initialDir3D * diagonalLength);
 
     return true;
 }
