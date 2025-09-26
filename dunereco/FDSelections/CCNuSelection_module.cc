@@ -1795,9 +1795,9 @@ void FDSelection::CCNuSelection::FillPFParticleInfo(art::Event const & evt)
                 fRecoPFPTrueMomX[pfpIndex] = matched_mcparticle->Momentum().X();
                 fRecoPFPTrueMomY[pfpIndex] = matched_mcparticle->Momentum().Y();
                 fRecoPFPTrueMomZ[pfpIndex] = matched_mcparticle->Momentum().Z();
-                fRecoPFPTrueStartX[pfpIndex] = fRecoPFPTruePDG[pfpIndex] == matched_mcparticle->Position(0).X();
-                fRecoPFPTrueStartY[pfpIndex] = fRecoPFPTruePDG[pfpIndex] == matched_mcparticle->Position(0).Y();
-                fRecoPFPTrueStartZ[pfpIndex] = fRecoPFPTruePDG[pfpIndex] == matched_mcparticle->Position(0).Z();
+                fRecoPFPTrueStartX[pfpIndex] = matched_mcparticle->Position(0).X();
+                fRecoPFPTrueStartY[pfpIndex] = matched_mcparticle->Position(0).Y();
+                fRecoPFPTrueStartZ[pfpIndex] = matched_mcparticle->Position(0).Z();
                 fRecoPFPTrueEndX[pfpIndex] = matched_mcparticle->EndPosition().X();
                 fRecoPFPTrueEndY[pfpIndex] = matched_mcparticle->EndPosition().Y();
                 fRecoPFPTrueEndZ[pfpIndex] = matched_mcparticle->EndPosition().Z();
