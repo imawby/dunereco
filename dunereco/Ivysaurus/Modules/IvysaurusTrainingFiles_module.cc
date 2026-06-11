@@ -128,7 +128,6 @@ private:
   GridManager m_gridManager;
   TrackVarManager m_trackVarManager;
   ShowerVarManager m_showerVarManager;
-  //IvysaurusEvaluator m_ivysaurusEvaluator;
 
   // FCL module labels
   std::string m_hitModuleLabel;
@@ -178,7 +177,6 @@ IvysaurusTrainingFiles::IvysaurusTrainingFiles(fhicl::ParameterSet const &pset) 
     m_gridManager(pset.get<fhicl::ParameterSet>("GridManager")),
     m_trackVarManager(pset.get<fhicl::ParameterSet>("TrackVarManager")),
     m_showerVarManager(pset.get<fhicl::ParameterSet>("ShowerVarManager")),
-    //m_ivysaurusEvaluator(pset.get<fhicl::ParameterSet>("IvysaurusEvaluator")),
     m_hitModuleLabel(pset.get<std::string>("HitModuleLabel")),
     m_recoModuleLabel(pset.get<std::string>("RecoModuleLabel")),
     m_completenessThreshold(pset.get<float>("CompletenessThreshold")),
@@ -225,7 +223,7 @@ void IvysaurusTrainingFiles::analyze(const art::Event &evt)
         m_subrun = evt.subRun();
         m_event = evt.event();
 
-        ////////////////////////////////////////////                                                                                                                                                                                    
+        ////////////////////////////////////////////
         // First, let's get the truth information...
         ////////////////////////////////////////////  
         const std::vector<art::Ptr<recob::Hit>> pfpHits = dune_ana::DUNEAnaPFParticleUtils::GetHits(pfparticle, evt, m_recoModuleLabel);
@@ -253,7 +251,7 @@ void IvysaurusTrainingFiles::analyze(const art::Event &evt)
             continue;
         }
 
-        ////////////////////////////////////////////                                                                                                                                                                                    
+        ////////////////////////////////////////////
         // Apply truth quality cuts
         ////////////////////////////////////////////  
         if ((m_completeness < m_completenessThreshold) || (m_purity < m_purityThreshold))
@@ -262,7 +260,7 @@ void IvysaurusTrainingFiles::analyze(const art::Event &evt)
             continue;
         }
 
-        ////////////////////////////////////////////                                                                                                                                                                                    
+        ////////////////////////////////////////////
         // Now, get the track score... 
         ////////////////////////////////////////////  
         const art::Ptr<larpandoraobj::PFParticleMetadata> &metadata = dune_ana::DUNEAnaPFParticleUtils::GetMetadata(pfparticle, evt, m_recoModuleLabel);
@@ -271,7 +269,7 @@ void IvysaurusTrainingFiles::analyze(const art::Event &evt)
         if (metaMap.find("TrackScore") != metaMap.end())
             m_trackScore = metaMap.at("TrackScore");
 
-        ////////////////////////////////////////////                                                                                                                                                                                    
+        ////////////////////////////////////////////
         // Now, get space points into file.. 
         ////////////////////////////////////////////  
         const std::vector<art::Ptr<recob::SpacePoint>> spacepoints = dune_ana::DUNEAnaPFParticleUtils::GetSpacePoints(pfparticle, evt, m_recoModuleLabel);
@@ -289,23 +287,66 @@ void IvysaurusTrainingFiles::analyze(const art::Event &evt)
         m_nHits2D = pfpHits.size();
 
         ////////////////////////////////////////////
-        // Now, into 2D
+        // Initialise grids...
         ////////////////////////////////////////////  
-        int nInitialisedGrids(0);
+        // This is just creating the grid and filling the hit list.
+        GridManager::GridMap gridMapStart = m_gridManager.ObtainGridMap(evt, pfparticle, true);
 
-        for (IvysaurusUtils::PandoraView pandoraView : {IvysaurusUtils::PandoraView::TPC_VIEW_U, IvysaurusUtils::PandoraView::TPC_VIEW_V, IvysaurusUtils::PandoraView::TPC_VIEW_W})
+        if (gridMapStart.size() != 3)
+            continue;
+
+        GridManager::GridMap gridMapEnd = m_gridManager.ObtainGridMap(evt, pfparticle, false);
+
+        if (gridMapEnd.size() != 3)
+            continue;
+
+        ////////////////////////////////////////////
+        // Then fill CaloGrid, and set member vars
+        ////////////////////////////////////////////
+        for (IvysaurusUtils::PandoraView pandoraView : {IvysaurusUtils::PandoraView::TPC_VIEW_U,
+             IvysaurusUtils::PandoraView::TPC_VIEW_V, IvysaurusUtils::PandoraView::TPC_VIEW_W})
         {
-            GridManager::Grid startGrid = m_gridManager.ObtainViewGrid(evt, pfparticle, pandoraView, true);
-            GridManager::Grid endGrid = m_gridManager.ObtainViewGrid(evt, pfparticle, pandoraView, false);
+            GridManager::Grid &startGrid(gridMapStart.at(pandoraView));
+            GridManager::Grid &endGrid(gridMapEnd.at(pandoraView));
 
-            if (!startGrid.IsInitialised() || !endGrid.IsInitialised())
-                continue;
+            m_gridManager.FillViewGrid(evt, pfparticle, startGrid);
+            m_gridManager.FillViewGrid(evt, pfparticle, endGrid);
 
-            ++nInitialisedGrids;
+            std::vector<float> &startDriftBoundaries = pandoraView == IvysaurusUtils::PandoraView::TPC_VIEW_U ? m_startDriftBoundariesU :
+                pandoraView == IvysaurusUtils::PandoraView::TPC_VIEW_V ? m_startDriftBoundariesV : m_startDriftBoundariesW;
 
-            ////////////////////////////////////////////
-            // Let's fill the hit vectors...
-            ////////////////////////////////////////////
+            std::vector<float> &endDriftBoundaries = pandoraView == IvysaurusUtils::PandoraView::TPC_VIEW_U ? m_endDriftBoundariesU :
+                pandoraView == IvysaurusUtils::PandoraView::TPC_VIEW_V ? m_endDriftBoundariesV : m_endDriftBoundariesW;
+
+            std::vector<float> &startWireBoundaries = pandoraView == IvysaurusUtils::PandoraView::TPC_VIEW_U ? m_startWireBoundariesU : 
+                pandoraView == IvysaurusUtils::PandoraView::TPC_VIEW_V ? m_startWireBoundariesV : m_startWireBoundariesW;
+
+            std::vector<float> &endWireBoundaries = pandoraView == IvysaurusUtils::PandoraView::TPC_VIEW_U ? m_endWireBoundariesU : 
+                pandoraView == IvysaurusUtils::PandoraView::TPC_VIEW_V ? m_endWireBoundariesV : m_endWireBoundariesW;
+
+            std::vector<std::vector<float>> &startGridValues = pandoraView == IvysaurusUtils::PandoraView::TPC_VIEW_U ? m_startGridValuesU : 
+                pandoraView == IvysaurusUtils::PandoraView::TPC_VIEW_V ? m_startGridValuesV : m_startGridValuesW;
+
+            std::vector<std::vector<float>> &endGridValues = pandoraView == IvysaurusUtils::PandoraView::TPC_VIEW_U ? m_endGridValuesU : 
+                pandoraView == IvysaurusUtils::PandoraView::TPC_VIEW_V ? m_endGridValuesV : m_endGridValuesW;
+
+            startDriftBoundaries = startGrid.GetDriftBoundaries();
+            endDriftBoundaries = endGrid.GetDriftBoundaries();
+            startWireBoundaries = startGrid.GetWireBoundaries();
+            endWireBoundaries = endGrid.GetWireBoundaries();
+            startGridValues = startGrid.GetGridValues();
+            endGridValues = endGrid.GetGridValues();
+        }
+
+        /////////////////////////////////////////////////
+        // Now, save hit info, either all or just grid
+        /////////////////////////////////////////////////
+        for (IvysaurusUtils::PandoraView pandoraView : {IvysaurusUtils::PandoraView::TPC_VIEW_U,
+             IvysaurusUtils::PandoraView::TPC_VIEW_V, IvysaurusUtils::PandoraView::TPC_VIEW_W})
+        {
+            GridManager::Grid &startGrid(gridMapStart.at(pandoraView));
+            GridManager::Grid &endGrid(gridMapEnd.at(pandoraView));
+
             std::vector<std::vector<double>> &projections = pandoraView == IvysaurusUtils::PandoraView::TPC_VIEW_U ? m_projectionsU :
                 pandoraView == IvysaurusUtils::PandoraView::TPC_VIEW_V ? m_projectionsV : m_projectionsW;
 
@@ -337,66 +378,14 @@ void IvysaurusTrainingFiles::analyze(const art::Event &evt)
                         projections.push_back({pandoraHitPosition.X(), pandoraHitPosition.Y(), pandoraHitPosition.Z()});
                 }
             }
-
-            ////////////////////////////////////////////
-            // Then fill grid vectors...
-            ////////////////////////////////////////////
-            // CaloGrid
-            m_gridManager.FillViewGrid(evt, pfparticle, startGrid);
-            m_gridManager.FillViewGrid(evt, pfparticle, endGrid);
-
-            // // DisplacementGrid
-            // const art::Ptr<recob::Vertex> nuVertex3D = dune_ana::DUNEAnaPFParticleUtils::GetVertex(nuPFP, evt, m_recoModuleLabel);
-            // const TVector3 nuVertex3D_tv = TVector3(nuVertex3D->position().X(), nuVertex3D->position().Y(), nuVertex3D->position().Z());
-            // GridManager::Grid startGrid_disp = m_gridManager.ObtainViewDisplacementGrid(evt, nuVertex3D_tv, startGrid);
-            // GridManager::Grid endGrid_disp = m_gridManager.ObtainViewDisplacementGrid(evt, nuVertex3D_tv, endGrid);
-
-            std::vector<float> &startDriftBoundaries = pandoraView == IvysaurusUtils::PandoraView::TPC_VIEW_U ? m_startDriftBoundariesU :
-                pandoraView == IvysaurusUtils::PandoraView::TPC_VIEW_V ? m_startDriftBoundariesV : m_startDriftBoundariesW;
-
-            std::vector<float> &endDriftBoundaries = pandoraView == IvysaurusUtils::PandoraView::TPC_VIEW_U ? m_endDriftBoundariesU :
-                pandoraView == IvysaurusUtils::PandoraView::TPC_VIEW_V ? m_endDriftBoundariesV : m_endDriftBoundariesW;
-
-            std::vector<float> &startWireBoundaries = pandoraView == IvysaurusUtils::PandoraView::TPC_VIEW_U ? m_startWireBoundariesU : 
-                pandoraView == IvysaurusUtils::PandoraView::TPC_VIEW_V ? m_startWireBoundariesV : m_startWireBoundariesW;
-
-            std::vector<float> &endWireBoundaries = pandoraView == IvysaurusUtils::PandoraView::TPC_VIEW_U ? m_endWireBoundariesU : 
-                pandoraView == IvysaurusUtils::PandoraView::TPC_VIEW_V ? m_endWireBoundariesV : m_endWireBoundariesW;
-
-            std::vector<std::vector<float>> &startGridValues = pandoraView == IvysaurusUtils::PandoraView::TPC_VIEW_U ? m_startGridValuesU : 
-                pandoraView == IvysaurusUtils::PandoraView::TPC_VIEW_V ? m_startGridValuesV : m_startGridValuesW;
-
-            std::vector<std::vector<float>> &endGridValues = pandoraView == IvysaurusUtils::PandoraView::TPC_VIEW_U ? m_endGridValuesU : 
-                pandoraView == IvysaurusUtils::PandoraView::TPC_VIEW_V ? m_endGridValuesV : m_endGridValuesW;
-
-            // std::vector<std::vector<float>> &startGridValues_disp = pandoraView == IvysaurusUtils::PandoraView::TPC_VIEW_U ? m_startGridValuesU_disp : 
-            //     pandoraView == IvysaurusUtils::PandoraView::TPC_VIEW_V ? m_startGridValuesV_disp : m_startGridValuesW_disp;
-
-            // std::vector<std::vector<float>> &endGridValues_disp = pandoraView == IvysaurusUtils::PandoraView::TPC_VIEW_U ? m_endGridValuesU_disp : 
-            //     pandoraView == IvysaurusUtils::PandoraView::TPC_VIEW_V ? m_endGridValuesV_disp : m_endGridValuesW_disp;
-
-            startDriftBoundaries = startGrid.GetDriftBoundaries();
-            endDriftBoundaries = endGrid.GetDriftBoundaries();
-            startWireBoundaries = startGrid.GetWireBoundaries();
-            endWireBoundaries = endGrid.GetWireBoundaries();
-            startGridValues = startGrid.GetGridValues();
-            endGridValues = endGrid.GetGridValues();
-            // startGridValues_disp = startGrid_disp.GetGridValues();
-            // endGridValues_disp = endGrid_disp.GetGridValues();
         }
 
-        if (nInitialisedGrids != 3)
-        {
-            std::cout << "n grids" << std::endl;
-            continue;
-        }
-
-        ////////////////////////////////////////////                                                                                                                                                                                    
+        ////////////////////////////////////////////
         // Just leave this here a minute
         ////////////////////////////////////////////  
         //m_ivysaurusEvaluator.IvysaurusUseEvaluate(evt, pfparticle);
 
-        ////////////////////////////////////////////                                                                                                                                                                                    
+        ////////////////////////////////////////////
         // Now fill the track variables
         ////////////////////////////////////////////  
         TrackVarManager::TrackVars trackVars;
@@ -414,7 +403,7 @@ void IvysaurusTrainingFiles::analyze(const art::Event &evt)
         m_trackWobble = trackVars.GetWobble();
         m_trackMomComparison = trackVars.GetMomentumComparison();
 
-        ////////////////////////////////////////////                                                                                                                                                                                    
+        ////////////////////////////////////////////
         // Now fill the shower variables
         ////////////////////////////////////////////  
         ShowerVarManager::ShowerVars showerVars;

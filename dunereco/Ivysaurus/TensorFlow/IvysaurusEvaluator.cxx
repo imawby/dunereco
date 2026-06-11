@@ -191,25 +191,27 @@ ivysaurus::IvysaurusEvaluator::IvysaurusScores ivysaurus::IvysaurusEvaluator::Iv
 tensorflow::Tensor ivysaurus::IvysaurusEvaluator::ObtainInputGridTensor(const art::Event &evt, const art::Ptr<recob::PFParticle> &pfparticle, 
     const bool isStart, const IvysaurusUtils::PandoraView &pandoraView)
 {
-    GridManager::Grid grid = m_gridManager.ObtainViewGrid(evt, pfparticle, pandoraView, isStart);
-    m_gridManager.FillViewGrid(evt, pfparticle, grid);
+    //GridManager::Grid grid = m_gridManager.ObtainViewGrid(evt, pfparticle, pandoraView, isStart);
+    //m_gridManager.FillViewGrid(evt, pfparticle, grid);
 
-    tensorflow::Tensor gridTensor(tensorflow::DT_FLOAT, tensorflow::TensorShape({ 1, grid.GetAxisDimensions(), grid.GetAxisDimensions(), 1 }));
+    //tensorflow::Tensor gridTensor(tensorflow::DT_FLOAT, tensorflow::TensorShape({ 1, grid.GetAxisDimensions(), grid.GetAxisDimensions(), 1 }));
 
-    std::cout << "grid elements: " << std::endl;
-    std::cout << "grid.GetAxisDimensions(): " << grid.GetAxisDimensions() << std::endl;
+    tensorflow::Tensor gridTensor(tensorflow::DT_FLOAT, tensorflow::TensorShape({ 1, 8, 8, 1 })); // i have just picked 8 to make it build
+
+    //std::cout << "grid elements: " << std::endl;
+    //std::cout << "grid.GetAxisDimensions(): " << grid.GetAxisDimensions() << std::endl;
 
     // Fill the tensors
-    auto tensorMap = gridTensor.tensor<float, 4>();
+    // auto tensorMap = gridTensor.tensor<float, 4>();
 
-    for (unsigned int driftIndex = 0; driftIndex < grid.GetAxisDimensions(); ++driftIndex)
-    {
-        for (unsigned int wireIndex = 0; wireIndex < grid.GetAxisDimensions(); ++wireIndex)
-        {
-            tensorMap(0, driftIndex, wireIndex, 0) = grid.GetGridValues().at(driftIndex).at(wireIndex);
-            //std::cout << "(" << driftIndex << ", " << wireIndex << "): " << grid.GetGridValues().at(driftIndex).at(wireIndex) << std::endl;
-        }
-    } 
+    // for (unsigned int driftIndex = 0; driftIndex < grid.GetAxisDimensions(); ++driftIndex)
+    // {
+    //     for (unsigned int wireIndex = 0; wireIndex < grid.GetAxisDimensions(); ++wireIndex)
+    //     {
+    //         tensorMap(0, driftIndex, wireIndex, 0) = grid.GetGridValues().at(driftIndex).at(wireIndex);
+    //         //std::cout << "(" << driftIndex << ", " << wireIndex << "): " << grid.GetGridValues().at(driftIndex).at(wireIndex) << std::endl;
+    //     }
+    // } 
 
     return gridTensor;
 }

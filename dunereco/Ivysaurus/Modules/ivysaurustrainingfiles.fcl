@@ -1,7 +1,6 @@
 #include "gridmanager.fcl"
 #include "trackvarmanager.fcl"
 #include "showervarmanager.fcl"
-#include "ivysaurusevaluator.fcl"
 
 BEGIN_PROLOG
 
@@ -12,7 +11,6 @@ ivysaurus_training_files:
   GridManager:            @local::grid_manager
   TrackVarManager:        @local::trackvar_manager
   ShowerVarManager:       @local::showervar_manager
-  IvysaurusEvaluator:     @local::ivysaurus_evaluator
   HitModuleLabel:         'hitfd'
   RecoModuleLabel:        'pandora'
   CompletenessThreshold:   0.5

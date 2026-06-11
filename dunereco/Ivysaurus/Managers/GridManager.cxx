@@ -255,7 +255,7 @@ GridManager::GridMap GridManager::ObtainGridMap(const art::Event &evt, const art
         }
     }
 
-    // Now need to project these things into each 'Pandora view'
+    // Now need to project extremal points into each 'Pandora view'
     for (IvysaurusUtils::PandoraView pandoraView : {IvysaurusUtils::PandoraView::TPC_VIEW_U, 
          IvysaurusUtils::PandoraView::TPC_VIEW_V, IvysaurusUtils::PandoraView::TPC_VIEW_W})
     {
@@ -277,63 +277,63 @@ GridManager::GridMap GridManager::ObtainGridMap(const art::Event &evt, const art
 
 /////////////////////////////////////////////////////////////
 
-GridManager::Grid GridManager::ObtainViewGrid(const art::Event &evt, const art::Ptr<recob::PFParticle> &pfparticle, 
-    const IvysaurusUtils::PandoraView pandoraView, const bool isStart) const
-{
-    // First consider only pfp hits near vertex (then we will add in children)
-    std::vector<art::Ptr<recob::SpacePoint>> spacepointsToConsider;
-    GetSpacepointsToConsider(evt, pfparticle, spacepointsToConsider);
+// GridManager::Grid GridManager::ObtainViewGrid(const art::Event &evt, const art::Ptr<recob::PFParticle> &pfparticle, 
+//     const IvysaurusUtils::PandoraView pandoraView, const bool isStart) const
+// {
+//     // First consider only pfp hits near vertex (then we will add in children)
+//     std::vector<art::Ptr<recob::SpacePoint>> spacepointsToConsider;
+//     GetSpacepointsToConsider(evt, pfparticle, spacepointsToConsider);
 
-    if (spacepointsToConsider.empty())
-        return Grid(TVector3(0.f, 0.f, 0.f), 0.f, 0.f, 0, m_maxGridEntry, m_nSigmaConsidered, m_integralStep, pandoraView, false);
+//     if (spacepointsToConsider.empty())
+//         return Grid(TVector3(0.f, 0.f, 0.f), 0.f, 0.f, 0, m_maxGridEntry, m_nSigmaConsidered, m_integralStep, pandoraView, false);
 
-    // Find the extremal diagonal.. 
-    TVector3 position1 = TVector3(0.f, 0.f, 0.f);
-    TVector3 position2 = TVector3(0.f, 0.f, 0.f); // Along the particle direction from position1
+//     // Find the extremal diagonal.. 
+//     TVector3 position1 = TVector3(0.f, 0.f, 0.f);
+//     TVector3 position2 = TVector3(0.f, 0.f, 0.f); // Along the particle direction from position1
 
-    if (isStart)
-    {
-        if (!GetStartExtremalPoints(evt, spacepointsToConsider, pfparticle, position1, position2))
-        {
-            return Grid(TVector3(0.f, 0.f, 0.f), 0.f, 0.f, 0, m_maxGridEntry, m_nSigmaConsidered, m_integralStep, pandoraView, false);
-        }
-    }
-    else
-    {
-        if (pfparticle->PdgCode() == 13)
-        {
-            if (!GetEndExtremalPointsTrack(evt, pfparticle, position1, position2))
-            {
-                if (!GetEndExtremalPointsShower(evt, pfparticle, position1, position2))
-                {
-                    return Grid(TVector3(0.f, 0.f, 0.f), 0.f, 0.f, 0, m_maxGridEntry, m_nSigmaConsidered, m_integralStep, pandoraView, false);
-                }
-            }
-        }
-        else
-        {
-            if (!GetEndExtremalPointsShower(evt, pfparticle, position1, position2))
-            {
-                if (!GetEndExtremalPointsTrack(evt, pfparticle, position1, position2))
-                {
-                    return Grid(TVector3(0.f, 0.f, 0.f), 0.f, 0.f, 0, m_maxGridEntry, m_nSigmaConsidered, m_integralStep, pandoraView, false);
-                }
-            }
-        }
-    }
+//     if (isStart)
+//     {
+//         if (!GetStartExtremalPoints(evt, spacepointsToConsider, pfparticle, position1, position2))
+//         {
+//             return Grid(TVector3(0.f, 0.f, 0.f), 0.f, 0.f, 0, m_maxGridEntry, m_nSigmaConsidered, m_integralStep, pandoraView, false);
+//         }
+//     }
+//     else
+//     {
+//         if (pfparticle->PdgCode() == 13)
+//         {
+//             if (!GetEndExtremalPointsTrack(evt, pfparticle, position1, position2))
+//             {
+//                 if (!GetEndExtremalPointsShower(evt, pfparticle, position1, position2))
+//                 {
+//                     return Grid(TVector3(0.f, 0.f, 0.f), 0.f, 0.f, 0, m_maxGridEntry, m_nSigmaConsidered, m_integralStep, pandoraView, false);
+//                 }
+//             }
+//         }
+//         else
+//         {
+//             if (!GetEndExtremalPointsShower(evt, pfparticle, position1, position2))
+//             {
+//                 if (!GetEndExtremalPointsTrack(evt, pfparticle, position1, position2))
+//                 {
+//                     return Grid(TVector3(0.f, 0.f, 0.f), 0.f, 0.f, 0, m_maxGridEntry, m_nSigmaConsidered, m_integralStep, pandoraView, false);
+//                 }
+//             }
+//         }
+//     }
 
-    // Now need to project these things into the 'Pandora view'
-    const TVector3 projectedPosition1 = ProjectIntoPandoraView(position1, pandoraView);
-    const TVector3 projectedPosition2 = ProjectIntoPandoraView(position2, pandoraView);
-    const float driftSpan = projectedPosition2.X() - projectedPosition1.X();
-    const float wireSpan = projectedPosition2.Z() - projectedPosition1.Z();
+//     // Now need to project these things into the 'Pandora view'
+//     const TVector3 projectedPosition1 = ProjectIntoPandoraView(position1, pandoraView);
+//     const TVector3 projectedPosition2 = ProjectIntoPandoraView(position2, pandoraView);
+//     const float driftSpan = projectedPosition2.X() - projectedPosition1.X();
+//     const float wireSpan = projectedPosition2.Z() - projectedPosition1.Z();
 
-    Grid grid = Grid(projectedPosition1, driftSpan, wireSpan, m_dimensions, m_maxGridEntry, m_nSigmaConsidered, m_integralStep, pandoraView, true);
+//     Grid grid = Grid(projectedPosition1, driftSpan, wireSpan, m_dimensions, m_maxGridEntry, m_nSigmaConsidered, m_integralStep, pandoraView, true);
 
-    FindHitsInGrid(evt, pfparticle, grid);
+//     FindHitsInGrid(evt, pfparticle, grid);
 
-    return grid;
-}
+//     return grid;
+// }
 
 /////////////////////////////////////////////////////////////
 
@@ -385,51 +385,51 @@ bool GridManager::GetStartExtremalPoints(const art::Event &evt, const std::vecto
 
 /////////////////////////////////////////////////////////////
 
-bool GridManager::GetStartExtremalPointsTrack(const art::Event &evt, const art::Ptr<recob::PFParticle> &pfparticle, 
-    TVector3 &position1, TVector3 &position2) const
-{
-    if (!dune_ana::DUNEAnaPFParticleUtils::IsTrack(pfparticle, evt, m_recoModuleLabel, m_trackModuleLabel))
-        return false;
+// bool GridManager::GetStartExtremalPointsTrack(const art::Event &evt, const art::Ptr<recob::PFParticle> &pfparticle, 
+//     TVector3 &position1, TVector3 &position2) const
+// {
+//     if (!dune_ana::DUNEAnaPFParticleUtils::IsTrack(pfparticle, evt, m_recoModuleLabel, m_trackModuleLabel))
+//         return false;
 
-    const art::Ptr<recob::Track> track = dune_ana::DUNEAnaPFParticleUtils::GetTrack(pfparticle, evt, m_recoModuleLabel, m_trackModuleLabel);
+//     const art::Ptr<recob::Track> track = dune_ana::DUNEAnaPFParticleUtils::GetTrack(pfparticle, evt, m_recoModuleLabel, m_trackModuleLabel);
 
-    const TVector3 direction = TVector3(track->StartDirection().X(), track->StartDirection().Y(), track->StartDirection().Z());
-    position1 = TVector3(track->Start().X(), track->Start().Y(), track->Start().Z());
-    const float diagonalLength = sqrt(2.0 * (m_gridSize3D * m_gridSize3D));
-    position2 = position1 + (direction * diagonalLength);
+//     const TVector3 direction = TVector3(track->StartDirection().X(), track->StartDirection().Y(), track->StartDirection().Z());
+//     position1 = TVector3(track->Start().X(), track->Start().Y(), track->Start().Z());
+//     const float diagonalLength = sqrt(2.0 * (m_gridSize3D * m_gridSize3D));
+//     position2 = position1 + (direction * diagonalLength);
 
-    return true;
-}
+//     return true;
+// }
 
-/////////////////////////////////////////////////////////////
+// /////////////////////////////////////////////////////////////
 
-bool GridManager::GetStartExtremalPointsShower(const art::Event &evt, const art::Ptr<recob::PFParticle> &pfparticle, 
-    TVector3 &position1, TVector3 &position2) const
-{
-    if (!dune_ana::DUNEAnaPFParticleUtils::IsShower(pfparticle, evt, m_recoModuleLabel, m_showerModuleLabel))
-        return false;
+// bool GridManager::GetStartExtremalPointsShower(const art::Event &evt, const art::Ptr<recob::PFParticle> &pfparticle, 
+//     TVector3 &position1, TVector3 &position2) const
+// {
+//     if (!dune_ana::DUNEAnaPFParticleUtils::IsShower(pfparticle, evt, m_recoModuleLabel, m_showerModuleLabel))
+//         return false;
 
-    const art::Ptr<recob::Shower> shower = dune_ana::DUNEAnaPFParticleUtils::GetShower(pfparticle, evt, m_recoModuleLabel, m_showerModuleLabel);
+//     const art::Ptr<recob::Shower> shower = dune_ana::DUNEAnaPFParticleUtils::GetShower(pfparticle, evt, m_recoModuleLabel, m_showerModuleLabel);
 
-    // Get the track stub
-    art::Handle<std::vector<recob::Shower>> showerHandle;
-    evt.getByLabel(m_showerModuleLabel, showerHandle);
+//     // Get the track stub
+//     art::Handle<std::vector<recob::Shower>> showerHandle;
+//     evt.getByLabel(m_showerModuleLabel, showerHandle);
 
-    art::FindManyP<recob::Track> initialTrackAssoc(showerHandle, evt, m_showerModuleLabel);
-    std::vector<art::Ptr<recob::Track>> initialTrackStubVector = initialTrackAssoc.at(shower.key());
+//     art::FindManyP<recob::Track> initialTrackAssoc(showerHandle, evt, m_showerModuleLabel);
+//     std::vector<art::Ptr<recob::Track>> initialTrackStubVector = initialTrackAssoc.at(shower.key());
 
-    if (initialTrackStubVector.size() != 1)
-        return false;
+//     if (initialTrackStubVector.size() != 1)
+//         return false;
 
-    art::Ptr<recob::Track> initialTrackStub = initialTrackStubVector.at(0);
+//     art::Ptr<recob::Track> initialTrackStub = initialTrackStubVector.at(0);
 
-    const TVector3 direction = TVector3(initialTrackStub->StartDirection().X(), initialTrackStub->StartDirection().Y(), initialTrackStub->StartDirection().Z());
-    position1 = TVector3(initialTrackStub->Start().X(), initialTrackStub->Start().Y(), initialTrackStub->Start().Z());
-    const float diagonalLength = sqrt(2.0 * (m_gridSize3D * m_gridSize3D));
-    position2 = position1 + (direction * diagonalLength);
+//     const TVector3 direction = TVector3(initialTrackStub->StartDirection().X(), initialTrackStub->StartDirection().Y(), initialTrackStub->StartDirection().Z());
+//     position1 = TVector3(initialTrackStub->Start().X(), initialTrackStub->Start().Y(), initialTrackStub->Start().Z());
+//     const float diagonalLength = sqrt(2.0 * (m_gridSize3D * m_gridSize3D));
+//     position2 = position1 + (direction * diagonalLength);
 
-    return true;
-}
+//     return true;
+// }
 
 /////////////////////////////////////////////////////////////
 
