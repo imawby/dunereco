@@ -43,6 +43,7 @@
 #include "larreco/RecoAlg/TrackMomentumCalculator.h"
 #include "lardataobj/RecoBase/PFParticle.h"
 #include "lardataobj/RecoBase/Vertex.h"
+#include "larpandora/LArPandoraEventBuilding/LArPandoraPID/LArPandoraPIDData/PandoraPIDResult.h"
 #include "larpandora/LArPandoraInterface/LArPandoraHelper.h"
 #include "larpandora/LArPandoraInterface/LArPandoraGeometry.h"
 #include "larsim/MCCheater/BackTrackerService.h"
@@ -104,9 +105,11 @@ private:
   void RunTrackSelection(art::Event const & evt);
   void RunPandizzleTrackSelection();
   void RunLongestLengthTrackSelection();
+  void RunIvysaurusTrackSelection();
   void RunShowerSelection(art::Event const & evt);
   void RunPandrizzleShowerSelection();
   void RunHighestEnergyShowerSelection();
+  void RunIvysaurusShowerSelection();
   TVector3 ProjectVectorOntoPlane(TVector3 vector_to_project, TVector3 plane_norm_vector);
 
   ////////////////////////////////////////
@@ -228,7 +231,13 @@ private:
   int fRecoPFPRecoNChildPFP[kMaxPFParticles];
   int fRecoPFPRecoNChildTrackPFP[kMaxPFParticles];
   int fRecoPFPRecoNChildShowerPFP[kMaxPFParticles];
-
+  double fRecoPFPIvysaurusMuonScore[kMaxPFParticles];
+  double fRecoPFPIvysaurusProtonScore[kMaxPFParticles];
+  double fRecoPFPIvysaurusPionScore[kMaxPFParticles];
+  double fRecoPFPIvysaurusElectronScore[kMaxPFParticles];
+  double fRecoPFPIvysaurusPhotonScore[kMaxPFParticles];
+  int fRecoPFPIvysaurusPDG[kMaxPFParticles];    
+  int fRecoPFPIvysaurusIsTrack[kMaxPFParticles];
   ////////////////////////////////////////
   // Track info
   ////////////////////////////////////////
@@ -282,6 +291,13 @@ private:
   double fSelLongestTrackRecoMom;
   double fSelLongestTrackNumuEnu;
   double fSelLongestTrackNumuEHad;
+  int fSelIvysaurusTrackSelf;
+  int fSelIvysaurusTrackIndex;
+  double fSelIvysaurusTrackScore;
+  int fSelIvysaurusTrackContained;
+  double fSelIvysaurusTrackRecoMom;
+  double fSelIvysaurusTrackNumuEnu;
+  double fSelIvysaurusTrackNumuEHad;
   ////////////////////////////////////////
   // Shower Info
   ////////////////////////////////////////
@@ -341,6 +357,11 @@ private:
   double fSelShowerHighestEnergy;
   double fSelEnergyShowerNueEnu;
   double fSelEnergyShowerNueEHad;
+  int fSelIvysaurusShowerSelf;
+  int fSelIvysaurusShowerIndex;
+  double fSelIvysaurusShowerScore;
+  double fSelIvysaurusShowerNueEnu;
+  double fSelIvysaurusShowerNueEHad;    
   ////////////////////////////////////////
   //Module labels
   ////////////////////////////////////////
@@ -351,6 +372,7 @@ private:
   std::string fTrackModuleLabel;
   std::string fShowerModuleLabel;
   std::string fRecoModuleLabel;
+  std::string fPandoraPIDModuleLabel;
   std::string fHitsModuleLabel;
   std::string fPOTModuleLabel;
   std::string fCVNModuleLabel;
@@ -386,6 +408,7 @@ FDSelection::CCNuSelection::CCNuSelection(fhicl::ParameterSet const & pset) :
   fTrackModuleLabel(pset.get<std::string>("TrackModuleLabel")),
   fShowerModuleLabel(pset.get<std::string>("ShowerModuleLabel")),
   fRecoModuleLabel(pset.get<std::string>("RecoModuleLabel")),
+  fPandoraPIDModuleLabel(pset.get<std::string>("PandoraPIDModuleLabel")),
   fHitsModuleLabel(pset.get<std::string>("HitsModuleLabel")),
   fPOTModuleLabel(pset.get<std::string>("POTModuleLabel")),
   fCVNModuleLabel(pset.get<std::string>("CVNModuleLabel")),
@@ -565,7 +588,13 @@ void FDSelection::CCNuSelection::beginJob()
     fTree->Branch("RecoPFPRecoNChildPFP", fRecoPFPRecoNChildPFP,"RecoPFPRecoNChildPFP[NRecoPFPs]/I");
     fTree->Branch("RecoPFPRecoNChildTrackPFP", fRecoPFPRecoNChildTrackPFP,"RecoPFPRecoNChildTrackPFP[NRecoPFPs]/I");
     fTree->Branch("RecoPFPRecoNChildShowerPFP", fRecoPFPRecoNChildShowerPFP,"RecoPFPRecoNChildShowerPFP[NRecoPFPs]/I");
-
+    fTree->Branch("RecoPFPIvysaurusMuonScore", fRecoPFPIvysaurusMuonScore, "RecoPFPIvysaurusMuonScore[NRecoPFPs]/D");
+    fTree->Branch("RecoPFPIvysaurusProtonScore", fRecoPFPIvysaurusProtonScore, "RecoPFPIvysaurusProtonScore[NRecoPFPs]/D");
+    fTree->Branch("RecoPFPIvysaurusPionScore", fRecoPFPIvysaurusPionScore, "RecoPFPIvysaurusPionScore[NRecoPFPs]/D");
+    fTree->Branch("RecoPFPIvysaurusElectronScore", fRecoPFPIvysaurusElectronScore, "RecoPFPIvysaurusElectronScore[NRecoPFPs]/D");
+    fTree->Branch("RecoPFPIvysaurusPhotonScore", fRecoPFPIvysaurusPhotonScore, "RecoPFPIvysaurusPhotonScore[NRecoPFPs]/D");
+    fTree->Branch("RecoPFPIvysaurusPDG", fRecoPFPIvysaurusPDG, "RecoPFPIvysaurusPDG[NRecoPFPs]/I");  
+    fTree->Branch("RecoPFPIvysaurusIsTrack", fRecoPFPIvysaurusIsTrack, "RecoPFPIvysaurusIsTrack[NRecoPFPs]/I");
     ////////////////////////////
     // Track Info
     ////////////////////////////
@@ -619,7 +648,14 @@ void FDSelection::CCNuSelection::beginJob()
     fTree->Branch("SelLongestTrackRecoMom", &fSelLongestTrackRecoMom);
     fTree->Branch("SelLongestTrackNumuEnu", &fSelLongestTrackNumuEnu);
     fTree->Branch("SelLongestTrackNumuEHad", &fSelLongestTrackNumuEHad);
-
+    fTree->Branch("SelIvysaurusTrackSelf", &fSelIvysaurusTrackSelf);
+    fTree->Branch("SelIvysaurusTrackIndex", &fSelIvysaurusTrackIndex);
+    fTree->Branch("SelIvysaurusTrackScore", &fSelIvysaurusTrackScore);
+    fTree->Branch("SelIvysaurusTrackContained", &fSelIvysaurusTrackScore);
+    fTree->Branch("SelIvysaurusTrackContained", &fSelIvysaurusTrackContained);
+    fTree->Branch("SelIvysaurusTrackRecoMom", &fSelIvysaurusTrackRecoMom);
+    fTree->Branch("SelIvysaurusTrackNumuEnu", &fSelIvysaurusTrackNumuEnu);
+    fTree->Branch("SelIvysaurusTrackNumuEHad", &fSelIvysaurusTrackNumuEHad);
     ///////////////////////////
     // Shower Info
     ///////////////////////////
@@ -686,6 +722,11 @@ void FDSelection::CCNuSelection::beginJob()
     fTree->Branch("SelShowerHighestEnergy", &fSelShowerHighestEnergy);
     fTree->Branch("SelEnergyShowerNueEnu", &fSelEnergyShowerNueEnu);
     fTree->Branch("SelEnergyShowerNueEHad", &fSelEnergyShowerNueEHad);
+    fTree->Branch("SelIvysaurusShowerSelf", &fSelIvysaurusShowerSelf);
+    fTree->Branch("SelIvysaurusShowerIndex", &fSelIvysaurusShowerIndex);
+    fTree->Branch("SelIvysaurusShowerScore", &fSelIvysaurusShowerScore);
+    fTree->Branch("SelIvysaurusShowerNueEnu", &fSelIvysaurusShowerNueEnu);
+    fTree->Branch("SelIvysaurusShowerNueEHad", &fSelIvysaurusShowerNueEHad);   
 }
 
 //////////////////////////////////////////////////////////////////////////////////
@@ -855,7 +896,13 @@ void FDSelection::CCNuSelection::Reset()
         fRecoPFPRecoNChildPFP[i] = kDefInt;
         fRecoPFPRecoNChildTrackPFP[i] = kDefInt;
         fRecoPFPRecoNChildShowerPFP[i] = kDefInt;
-
+        fRecoPFPIvysaurusMuonScore[i] = kDefDoub;
+        fRecoPFPIvysaurusProtonScore[i] = kDefDoub;
+        fRecoPFPIvysaurusPionScore[i] = kDefDoub;
+        fRecoPFPIvysaurusElectronScore[i] = kDefDoub;
+        fRecoPFPIvysaurusPhotonScore[i] = kDefDoub;
+        fRecoPFPIvysaurusPDG[i] = kDefInt;   
+        fRecoPFPIvysaurusIsTrack[i] = kDefInt;        
         ////////////////////////////
         // Track stuff
         ////////////////////////////
@@ -961,6 +1008,13 @@ void FDSelection::CCNuSelection::Reset()
     fSelLongestTrackRecoMom = kDefDoub;
     fSelLongestTrackNumuEnu = kDefDoub;
     fSelLongestTrackNumuEHad = kDefDoub;
+    fSelIvysaurusTrackSelf = -1;
+    fSelIvysaurusTrackIndex = -1;
+    fSelIvysaurusTrackScore = kDefDoub;
+    fSelIvysaurusTrackContained = -1;
+    fSelIvysaurusTrackRecoMom = kDefDoub;
+    fSelIvysaurusTrackNumuEnu = kDefDoub;
+    fSelIvysaurusTrackNumuEHad = kDefDoub;
 
     fSelShowerPandrizzleSelf = -1;
     fSelShowerPandrizzleIndex = -1;
@@ -973,6 +1027,11 @@ void FDSelection::CCNuSelection::Reset()
     fSelShowerHighestEnergy = kDefDoub;
     fSelEnergyShowerNueEnu = kDefDoub;
     fSelEnergyShowerNueEHad = kDefDoub;
+    fSelIvysaurusShowerSelf = -1;
+    fSelIvysaurusShowerIndex = -1;
+    fSelIvysaurusShowerScore = kDefDoub;
+    fSelIvysaurusShowerNueEnu = kDefDoub;
+    fSelIvysaurusShowerNueEHad = kDefDoub;    
 }
 
 //////////////////////////////////////////////////////////////////////////////////
@@ -1332,6 +1391,60 @@ void FDSelection::CCNuSelection::FillPFParticleInfo(art::Event const & evt)
             }
         }
 
+        // Get PandoraPID scores
+        art::ValidHandle<std::vector<recob::PFParticle>> pfpHandle = evt.getValidHandle<std::vector<recob::PFParticle>>(fRecoModuleLabel);
+        art::FindManyP<pandorapid::PandoraPIDResult> pfpPIDAssn(pfpHandle, evt, fPandoraPIDModuleLabel);
+        std::vector<art::Ptr<pandorapid::PandoraPIDResult>> pandoraPIDResultVec(pfpPIDAssn.at(pfp.key()));
+
+        if (!pandoraPIDResultVec.empty())
+        {
+            art::Ptr<pandorapid::PandoraPIDResult> pandoraPIDResult(pandoraPIDResultVec.front());
+            const std::map<pandorapid::ParticleType, float> &ivysaurusScores(pandoraPIDResult->m_ivysaurusScores);
+            
+            fRecoPFPIvysaurusMuonScore[pfpIndex] = pandoraPIDResult->m_ivysaurusScores.at(pandorapid::ParticleType::MUON);
+            fRecoPFPIvysaurusProtonScore[pfpIndex] = pandoraPIDResult->m_ivysaurusScores.at(pandorapid::ParticleType::PROTON);
+            fRecoPFPIvysaurusPionScore[pfpIndex] = pandoraPIDResult->m_ivysaurusScores.at(pandorapid::ParticleType::PION);
+            fRecoPFPIvysaurusElectronScore[pfpIndex] = pandoraPIDResult->m_ivysaurusScores.at(pandorapid::ParticleType::ELECTRON);
+            fRecoPFPIvysaurusPhotonScore[pfpIndex] = pandoraPIDResult->m_ivysaurusScores.at(pandorapid::ParticleType::PHOTON);
+            
+            std::pair<pandorapid::ParticleType, float> ivysaurusPrediction(pandoraPIDResult->GetPredictedParticleType(ivysaurusScores));
+            
+            int ivyPDG = -1;
+            switch (ivysaurusPrediction.first)
+            {
+                case pandorapid::ParticleType::MUON:
+                    ivyPDG = 13;
+                    break;
+                case pandorapid::ParticleType::PROTON:
+                    ivyPDG = 2212;
+                    break;
+                case pandorapid::ParticleType::PION:
+                    ivyPDG = 211;
+                    break;                    
+                case pandorapid::ParticleType::KAON:
+                    ivyPDG = 321;
+                    break;
+                case pandorapid::ParticleType::ELECTRON:
+                    ivyPDG = 11;
+                    break;
+                case pandorapid::ParticleType::PHOTON:
+                    ivyPDG = 22;
+                    break;
+                default:
+                    break;
+            }
+        
+            int ivyIsTrack = -1;
+            if ((ivyPDG == 11) || (ivyPDG == 22))
+                ivyIsTrack = 0;
+            else if ((ivyPDG == 13) || (ivyPDG == 2212) || (ivyPDG == 211) || (ivyPDG == 321))
+                ivyIsTrack = 1;
+            
+            fRecoPFPIvysaurusPDG[pfpIndex] = ivyPDG;
+            fRecoPFPIvysaurusIsTrack[pfpIndex] = ivyIsTrack;
+        }
+        
+
         // Fill the track & shower information
         FillRecoTrackInfo(evt, pfp, pfpIndex);
         FillRecoShowerInfo(evt, pfp, pfpIndex);
@@ -1561,6 +1674,9 @@ void FDSelection::CCNuSelection::RunTrackSelection(art::Event const & evt)
 
     // Longest Length
     RunLongestLengthTrackSelection();
+
+    // Ivysaurus
+    RunIvysaurusTrackSelection();
 }
 
 ///////////////////////////////////////////////////////////////
@@ -1619,6 +1735,38 @@ void FDSelection::CCNuSelection::RunLongestLengthTrackSelection()
     }
 }
 
+///////////////////////////////////////////////////////////////
+
+void FDSelection::CCNuSelection::RunIvysaurusTrackSelection()
+{
+    float highestIvysaurusMuonScore = -1.f;
+
+    for (int i = 0; i < fNRecoPFPs; ++i)
+    {
+        if (!fRecoPFPIsPrimary[i])
+            continue;
+
+        if (fRecoPFPSelf[i] < 0)
+            continue;
+
+        if ((fRecoPFPIvysaurusMuonScore[i] < highestIvysaurusMuonScore) ||
+            (std::fabs(fRecoPFPIvysaurusMuonScore[i] - highestIvysaurusMuonScore) < std::numeric_limits<float>::epsilon()))
+        {
+            continue;
+        }
+
+
+        highestIvysaurusMuonScore = fRecoPFPIvysaurusMuonScore[i];
+        fSelIvysaurusTrackSelf = fRecoPFPSelf[i];
+        fSelIvysaurusTrackIndex = i;
+        fSelIvysaurusTrackScore = fRecoPFPIvysaurusMuonScore[i];
+        fSelIvysaurusTrackContained = fRecoTrackRecoContained[i];
+        fSelIvysaurusTrackRecoMom = fNumuRecoMomLep[i];
+        fSelIvysaurusTrackNumuEnu = fNumuRecoENu[i];
+        fSelIvysaurusTrackNumuEHad = fNumuRecoEHad[i];
+    }
+}
+
 ///////////////////////////////////////////////////////////////////////////////////
 
 void FDSelection::CCNuSelection::RunShowerSelection(art::Event const & evt)
@@ -1628,6 +1776,9 @@ void FDSelection::CCNuSelection::RunShowerSelection(art::Event const & evt)
 
     // HighestEnergy
     RunHighestEnergyShowerSelection();
+
+    // Ivysaurus
+    RunIvysaurusShowerSelection();
 }
 
 //////////////////////////////////////////////////////////////////
@@ -1700,6 +1851,35 @@ void FDSelection::CCNuSelection::RunHighestEnergyShowerSelection()
         fSelShowerHighestEnergy = fRecoShowerRecoEnergy[i][2];
         fSelEnergyShowerNueEnu = fNueRecoENu[i];
         fSelEnergyShowerNueEHad = fNueRecoEHad[i];
+    }
+}
+
+///////////////////////////////////////////////////////////////
+
+void FDSelection::CCNuSelection::RunIvysaurusShowerSelection()
+{
+    float highestIvysaurusElectronScore = -1.f;
+
+    for (int i = 0; i < fNRecoPFPs; ++i)
+    {
+        if (!fRecoPFPIsPrimary[i])
+            continue;
+
+        if (fRecoPFPSelf[i] < 0)
+            continue;
+
+        if ((fRecoPFPIvysaurusElectronScore[i] < highestIvysaurusElectronScore) ||
+            (std::fabs(fRecoPFPIvysaurusElectronScore[i] - highestIvysaurusElectronScore) < std::numeric_limits<float>::epsilon()))
+        {
+            continue;
+        }
+
+        highestIvysaurusElectronScore = fRecoPFPIvysaurusElectronScore[i];
+        fSelIvysaurusShowerSelf = fRecoPFPSelf[i];
+        fSelIvysaurusShowerIndex = i;
+        fSelIvysaurusShowerScore = fRecoPFPIvysaurusElectronScore[i];
+        fSelIvysaurusShowerNueEnu = fNueRecoENu[i];
+        fSelIvysaurusShowerNueEHad = fNueRecoEHad[i];
     }
 }
 

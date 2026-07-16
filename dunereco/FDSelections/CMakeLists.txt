@@ -24,6 +24,7 @@ art_make( LIBRARY_NAME FDSelection
             NeutrinoEnergyRecoAlg
             PandrizzleAlg
             PandizzleAlg
+            larpandora::LArPandoraEventBuilding
 
 MODULE_LIBRARIES FDSelection
 	  	           art::Persistency_Common
