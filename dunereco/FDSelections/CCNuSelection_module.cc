@@ -1,4 +1,4 @@
-///////////////////////////////////////////////
+//////////////////////////////////////////////
 // CCNuSelection analyzer
 //
 // Creates tree on which to perform Pandora-based numu/nue selection
@@ -44,6 +44,7 @@
 #include "lardataobj/RecoBase/PFParticle.h"
 #include "lardataobj/RecoBase/Vertex.h"
 #include "larpandora/LArPandoraEventBuilding/LArPandoraPID/LArPandoraPIDData/PandoraPIDResult.h"
+#include "larpandora/LArPandoraEventBuilding/LArPandoraPID/Ivysaurus/Utils/IvysaurusUtils.h"
 #include "larpandora/LArPandoraInterface/LArPandoraHelper.h"
 #include "larpandora/LArPandoraInterface/LArPandoraGeometry.h"
 #include "larsim/MCCheater/BackTrackerService.h"
@@ -115,6 +116,7 @@ private:
   ////////////////////////////////////////
   // Pandora maps
   ////////////////////////////////////////
+  std::map<int, int> fRollUpMap;    
   lar_pandora::MCParticleMap fMCParticleMap;   // Linking TrackID -> MCParticle
   lar_pandora::PFParticleMap fPFPMap;          // Linking Self() -> PFParticle
   std::vector<int> fReconstructedMCParticles;  // TrackIDs of reco'd MCParticles
@@ -200,6 +202,8 @@ private:
   ////////////////////////////////////////
   // Truth
   int fRecoPFPTruePDG[kMaxPFParticles];
+  int fRecoPFPTrueIsMichel[kMaxPFParticles];
+  int fRecoPFPTrueIsDR[kMaxPFParticles];    
   int fRecoPFPTrueTrackID[kMaxPFParticles];
   bool fRecoPFPTruePrimary[kMaxPFParticles];
   double fRecoPFPTrueMomX[kMaxPFParticles];
@@ -235,6 +239,7 @@ private:
   double fRecoPFPIvysaurusProtonScore[kMaxPFParticles];
   double fRecoPFPIvysaurusPionScore[kMaxPFParticles];
   double fRecoPFPIvysaurusElectronScore[kMaxPFParticles];
+  double fRecoPFPIvysaurusMichelDRScore[kMaxPFParticles];
   double fRecoPFPIvysaurusPhotonScore[kMaxPFParticles];
   int fRecoPFPIvysaurusPDG[kMaxPFParticles];    
   int fRecoPFPIvysaurusIsTrack[kMaxPFParticles];
@@ -439,6 +444,8 @@ void FDSelection::CCNuSelection::analyze(art::Event const & evt)
         fEvent = evt.event();
         fIsMC = !evt.isRealData();
 
+        const std::vector<art::Ptr<simb::MCParticle>> mcParticles = dune_ana::DUNEAnaEventUtils::GetMCParticles(evt, fLargeantModuleLabel);
+        IvysaurusUtils::PopulateRollUpMap(mcParticles, fRollUpMap);        
         FillPandoraMaps(evt);
         GetEventInfo(evt);
 
@@ -558,6 +565,8 @@ void FDSelection::CCNuSelection::beginJob()
     ////////////////////////////
     // True
     fTree->Branch("RecoPFPTruePDG", fRecoPFPTruePDG, "RecoPFPTruePDG[NRecoPFPs]/I");
+    fTree->Branch("RecoPFPTrueIsMichel", fRecoPFPTrueIsMichel, "RecoPFPTrueIsMichel[NRecoPFPs]/I");
+    fTree->Branch("RecoPFPTrueIsDR", fRecoPFPTrueIsDR, "RecoPFPTrueIsDR[NRecoPFPs]/I");
     fTree->Branch("RecoPFPTrueTrackID", fRecoPFPTrueTrackID, "RecoPFPTrueTrackID[NRecoPFPs]/I");
     fTree->Branch("RecoPFPTruePrimary", fRecoPFPTruePrimary,"RecoPFPTruePrimary[NRecoPFPs]/O");
     fTree->Branch("RecoPFPTrueMomX", fRecoPFPTrueMomX,"RecoPFPTrueMomX[NRecoPFPs]/D");
@@ -592,6 +601,7 @@ void FDSelection::CCNuSelection::beginJob()
     fTree->Branch("RecoPFPIvysaurusProtonScore", fRecoPFPIvysaurusProtonScore, "RecoPFPIvysaurusProtonScore[NRecoPFPs]/D");
     fTree->Branch("RecoPFPIvysaurusPionScore", fRecoPFPIvysaurusPionScore, "RecoPFPIvysaurusPionScore[NRecoPFPs]/D");
     fTree->Branch("RecoPFPIvysaurusElectronScore", fRecoPFPIvysaurusElectronScore, "RecoPFPIvysaurusElectronScore[NRecoPFPs]/D");
+    fTree->Branch("RecoPFPIvysaurusMichelDRScore", fRecoPFPIvysaurusMichelDRScore, "RecoPFPIvysaurusMichelDRScore[NRecoPFPs]/D");    
     fTree->Branch("RecoPFPIvysaurusPhotonScore", fRecoPFPIvysaurusPhotonScore, "RecoPFPIvysaurusPhotonScore[NRecoPFPs]/D");
     fTree->Branch("RecoPFPIvysaurusPDG", fRecoPFPIvysaurusPDG, "RecoPFPIvysaurusPDG[NRecoPFPs]/I");  
     fTree->Branch("RecoPFPIvysaurusIsTrack", fRecoPFPIvysaurusIsTrack, "RecoPFPIvysaurusIsTrack[NRecoPFPs]/I");
@@ -770,6 +780,7 @@ void FDSelection::CCNuSelection::Reset()
     ////////////////////////////////////////
     // Pandora maps
     ////////////////////////////////////////
+    fRollUpMap.clear();    
     fMCParticleMap.clear();
     fPFPMap.clear();
     fReconstructedMCParticles.clear();
@@ -866,6 +877,8 @@ void FDSelection::CCNuSelection::Reset()
         ////////////////////////////  
         // Truth
         fRecoPFPTruePDG[i] = kDefInt;
+        fRecoPFPTrueIsMichel[i] = kDefInt;
+        fRecoPFPTrueIsDR[i] = kDefInt;        
         fRecoPFPTrueTrackID[i] = kDefInt;
         fRecoPFPTruePrimary[i] = false;
         fRecoPFPTrueMomX[i] = kDefDoub;
@@ -900,6 +913,7 @@ void FDSelection::CCNuSelection::Reset()
         fRecoPFPIvysaurusProtonScore[i] = kDefDoub;
         fRecoPFPIvysaurusPionScore[i] = kDefDoub;
         fRecoPFPIvysaurusElectronScore[i] = kDefDoub;
+        fRecoPFPIvysaurusMichelDRScore[i] = kDefDoub;
         fRecoPFPIvysaurusPhotonScore[i] = kDefDoub;
         fRecoPFPIvysaurusPDG[i] = kDefInt;   
         fRecoPFPIvysaurusIsTrack[i] = kDefInt;        
@@ -1070,14 +1084,12 @@ void FDSelection::CCNuSelection::GetEventInfo(art::Event const & evt)
 
     // Get CVN results
     art::Handle<std::vector<cvn::Result>> cvnResult;
-    evt.getByLabel(fCVNModuleLabel, cvnResult);
-
-    if (!cvnResult->empty()) 
+    if (evt.getByLabel(fCVNModuleLabel, cvnResult) && !cvnResult->empty())
     {
-        fCVNResultNue = (*cvnResult)[0].GetNueProbability();
-        fCVNResultNumu = (*cvnResult)[0].GetNumuProbability();
+        fCVNResultNue   = (*cvnResult)[0].GetNueProbability();
+        fCVNResultNumu  = (*cvnResult)[0].GetNumuProbability();
         fCVNResultNutau = (*cvnResult)[0].GetNutauProbability();
-        fCVNResultNC = (*cvnResult)[0].GetNCProbability();
+        fCVNResultNC    = (*cvnResult)[0].GetNCProbability();
     }
 
     // Get neutrino energy (from all hits)
@@ -1296,7 +1308,7 @@ void FDSelection::CCNuSelection::FillPFParticleInfo(art::Event const & evt)
     std::vector<art::Ptr<recob::PFParticle>> nuChildren = dune_ana::DUNEAnaPFParticleUtils::GetChildParticles(nuPFP, evt, fRecoModuleLabel); 
     std::vector<art::Ptr<recob::PFParticle>> pfps = dune_ana::DUNEAnaEventUtils::GetPFParticles(evt, fRecoModuleLabel);
     std::vector<art::Ptr<recob::Hit>> eventHitList = dune_ana::DUNEAnaEventUtils::GetHits(evt, fHitsModuleLabel);
-
+    
     int pfpIndex = -1;
     fNRecoPFPs = 0;
 
@@ -1358,12 +1370,12 @@ void FDSelection::CCNuSelection::FillPFParticleInfo(art::Event const & evt)
         // Child particle info
         FillChildPFPInformation(pfp, evt, fRecoPFPRecoNChildPFP[pfpIndex], fRecoPFPRecoNChildTrackPFP[pfpIndex], fRecoPFPRecoNChildShowerPFP[pfpIndex]);
 
-        int g4id = TruthMatchUtils::TrueParticleIDFromTotalRecoHits(clockData, pfpHits, 1);
+        const int g4id = IvysaurusUtils::TrueParticleIDFromTotalRecoHits(clockData, pfpHits, fRollUpMap);
 
         if (TruthMatchUtils::Valid(g4id))
         {
-            fRecoPFPRecoCompleteness[pfpIndex] = FDSelectionUtils::CompletenessFromTrueParticleID(clockData, pfpHits, eventHitList, g4id);
-            fRecoPFPRecoHitPurity[pfpIndex] = FDSelectionUtils::HitPurityFromTrueParticleID(clockData, pfpHits, g4id);
+            fRecoPFPRecoCompleteness[pfpIndex] = IvysaurusUtils::CompletenessFromTrueParticleID(clockData, fRollUpMap, pfpHits, eventHitList, g4id);
+            fRecoPFPRecoHitPurity[pfpIndex] = IvysaurusUtils::HitPurityFromTrueParticleID(clockData, fRollUpMap, pfpHits, g4id);
 
             art::ServiceHandle<cheat::ParticleInventoryService> pi_serv;
             const simb::MCParticle* matched_mcparticle = pi_serv->ParticleList().at(g4id);
@@ -1388,6 +1400,43 @@ void FDSelection::CCNuSelection::FillPFParticleInfo(art::Event const & evt)
                 fRecoPFPTrueEndX[pfpIndex] = matched_mcparticle->EndPosition().X();
                 fRecoPFPTrueEndY[pfpIndex] = matched_mcparticle->EndPosition().Y();
                 fRecoPFPTrueEndZ[pfpIndex] = matched_mcparticle->EndPosition().Z();
+
+                fRecoPFPTrueIsMichel[pfpIndex] = 0;
+                fRecoPFPTrueIsDR[pfpIndex] = 0;
+                
+                // Is Michel or DR? (ignore 'primaries')
+                const int absPDG(std::abs(matched_mcparticle->PdgCode()));
+                if ((absPDG == 11) && (matched_mcparticle->Mother() != 0))
+                {
+                    simb::MCParticle* parentMC = pi_serv->ParticleList().at(matched_mcparticle->Mother());
+
+                    if ((matched_mcparticle->Process() == "muIoni") && (std::abs(parentMC->PdgCode()) == 13))
+                    {
+                        fRecoPFPTrueIsDR[pfpIndex] = 1;
+                    }
+                    else if (std::abs(parentMC->PdgCode()) == 13)
+                    {
+                        bool hasNumu = false, hasNue = false, hasElectron = false;
+                        for (int iChild = 0; iChild < parentMC->NumberDaughters(); ++iChild)
+                        {
+                            const int childTrackId = parentMC->Daughter(iChild);
+
+                            if (fMCParticleMap.find(childTrackId) == fMCParticleMap.end())
+                                continue;
+
+                            const art::Ptr<simb::MCParticle> &childMCParticle = fMCParticleMap.at(childTrackId);
+                            const int childPDG = std::abs(childMCParticle->PdgCode());
+                            if (childPDG == 11)
+                                hasElectron = true;
+                            else if (childPDG == 12)
+                                hasNue = true;
+                            else if (childPDG == 14)
+                                hasNumu = true;
+                        }
+                        
+                        fRecoPFPTrueIsMichel[pfpIndex] = (hasNumu && hasNue && hasElectron) ? 1 : 0;
+                    }
+                }
             }
         }
 
@@ -1399,13 +1448,14 @@ void FDSelection::CCNuSelection::FillPFParticleInfo(art::Event const & evt)
         if (!pandoraPIDResultVec.empty())
         {
             art::Ptr<pandorapid::PandoraPIDResult> pandoraPIDResult(pandoraPIDResultVec.front());
-            const std::map<pandorapid::ParticleType, float> &ivysaurusScores(pandoraPIDResult->m_ivysaurusScores);
+            const pandorapid::ParticleTypeScores &ivysaurusScores(pandoraPIDResult->GetIvysaurusScores());
             
-            fRecoPFPIvysaurusMuonScore[pfpIndex] = pandoraPIDResult->m_ivysaurusScores.at(pandorapid::ParticleType::MUON);
-            fRecoPFPIvysaurusProtonScore[pfpIndex] = pandoraPIDResult->m_ivysaurusScores.at(pandorapid::ParticleType::PROTON);
-            fRecoPFPIvysaurusPionScore[pfpIndex] = pandoraPIDResult->m_ivysaurusScores.at(pandorapid::ParticleType::PION);
-            fRecoPFPIvysaurusElectronScore[pfpIndex] = pandoraPIDResult->m_ivysaurusScores.at(pandorapid::ParticleType::ELECTRON);
-            fRecoPFPIvysaurusPhotonScore[pfpIndex] = pandoraPIDResult->m_ivysaurusScores.at(pandorapid::ParticleType::PHOTON);
+            fRecoPFPIvysaurusMuonScore[pfpIndex] = ivysaurusScores.at(pandorapid::ParticleType::MUON);
+            fRecoPFPIvysaurusProtonScore[pfpIndex] = ivysaurusScores.at(pandorapid::ParticleType::PROTON);
+            fRecoPFPIvysaurusPionScore[pfpIndex] = ivysaurusScores.at(pandorapid::ParticleType::PION);
+            fRecoPFPIvysaurusElectronScore[pfpIndex] = ivysaurusScores.at(pandorapid::ParticleType::ELECTRON);
+            fRecoPFPIvysaurusMichelDRScore[pfpIndex] = ivysaurusScores.at(pandorapid::ParticleType::MICHELDR);
+            fRecoPFPIvysaurusPhotonScore[pfpIndex] = ivysaurusScores.at(pandorapid::ParticleType::PHOTON);
             
             std::pair<pandorapid::ParticleType, float> ivysaurusPrediction(pandoraPIDResult->GetPredictedParticleType(ivysaurusScores));
             
@@ -1427,6 +1477,9 @@ void FDSelection::CCNuSelection::FillPFParticleInfo(art::Event const & evt)
                 case pandorapid::ParticleType::ELECTRON:
                     ivyPDG = 11;
                     break;
+                case pandorapid::ParticleType::MICHELDR:
+                    ivyPDG = 777;
+                    break;                    
                 case pandorapid::ParticleType::PHOTON:
                     ivyPDG = 22;
                     break;
@@ -1435,7 +1488,7 @@ void FDSelection::CCNuSelection::FillPFParticleInfo(art::Event const & evt)
             }
         
             int ivyIsTrack = -1;
-            if ((ivyPDG == 11) || (ivyPDG == 22))
+            if ((ivyPDG == 11) || (ivyPDG == 22) || (ivyPDG == 777))
                 ivyIsTrack = 0;
             else if ((ivyPDG == 13) || (ivyPDG == 2212) || (ivyPDG == 211) || (ivyPDG == 321))
                 ivyIsTrack = 1;

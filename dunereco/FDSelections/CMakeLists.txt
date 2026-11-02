@@ -25,6 +25,8 @@ art_make( LIBRARY_NAME FDSelection
             PandrizzleAlg
             PandizzleAlg
             larpandora::LArPandoraEventBuilding
+            larpandora::LArPandoraEventBuilding_LArPandoraPID_LArPandoraPIDData
+            larpandora::LArPandoraEventBuilding_LArPandoraPID_Ivysaurus_Utils
 
 MODULE_LIBRARIES FDSelection
 	  	           art::Persistency_Common
